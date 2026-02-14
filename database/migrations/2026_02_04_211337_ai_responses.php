@@ -11,7 +11,7 @@ return new class extends Migration
      */
     public function up(): void
     {
-        Schema::create('ai-responses', function (Blueprint $table) {
+        Schema::create('ai_responses', function (Blueprint $table) {
             $table->id();
             $table->foreignId('complaint_id')->constrained('complaints')->onDelete('cascade');
             $table->text('response_text');
@@ -26,6 +26,6 @@ return new class extends Migration
      */
     public function down(): void
     {
-        Schema::dropIfExists('ai-responses');
+        Schema::dropIfExists('ai_responses');
     }
 };

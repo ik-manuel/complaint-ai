@@ -12,7 +12,7 @@ class Customer extends Model
         'email'
     ];
 
-    public function complaint(): HasMany
+    public function complaints(): HasMany
     {
         return $this->hasMany(Complaint::class);
     }
