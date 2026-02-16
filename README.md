@@ -1,59 +1,290 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# ComplaintAI - AI-Powered Customer Complaint Management System
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+![Laravel](https://img.shields.io/badge/Laravel-10.x-red)
+![PHP](https://img.shields.io/badge/PHP-8.1%2B-blue)
+![AI](https://img.shields.io/badge/AI-Groq%20%7C%20Llama%203.1-green)
+![License](https://img.shields.io/badge/license-MIT-blue)
 
-## About Laravel
+An intelligent customer complaint management system that leverages Large Language Models (LLMs) to automatically classify complaints and generate professional, context-aware responses.
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+## 🎯 Project Overview
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+ComplaintAI demonstrates practical application of AI/LLM concepts in a real-world customer service scenario. Built as a learning project to showcase AI integration skills with Laravel.
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+### **Key Features**
 
-## Learning Laravel
+- 🤖 **AI-Powered Classification**: Automatically categorizes complaints by urgency (low/medium/high) and type (billing, shipping, product quality, technical, other)
+- ✍️ **Intelligent Response Generation**: Creates personalized, empathetic responses using role-based prompting
+- 📊 **Admin Dashboard**: Review, edit, and approve AI-generated responses before sending
+- 📈 **Analytics**: Track complaint statistics, urgency levels, and resolution rates
+- ⚡ **Real-time Processing**: Instant AI analysis upon complaint submission
+- 🎨 **Modern UI**: Clean, responsive interface built with Tailwind CSS
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework. You can also check out [Laravel Learn](https://laravel.com/learn), where you will be guided through building a modern Laravel application.
+## 🧠 AI Concepts Demonstrated
 
-If you don't feel like reading, [Laracasts](https://laracasts.com) can help. Laracasts contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
+This project showcases fundamental AI engineering concepts:
 
-## Laravel Sponsors
+### **Week 1 Concepts: LLM Fundamentals**
+- API integration with Groq (Llama 3.3 70B)
+- Temperature control (0.1 for classification, 0.3 for generation)
+- Token usage tracking and optimization
+- Error handling and retry logic
+- Cost awareness in production
 
-We would like to extend our thanks to the following sponsors for funding Laravel development. If you are interested in becoming a sponsor, please visit the [Laravel Partners program](https://partners.laravel.com).
+### **Week 2 Concepts: Prompt Engineering**
+- **Few-shot learning**: Teaching classification through examples
+- **Role-based prompting**: Different system messages for urgency levels
+- **Structured outputs**: Parsing AI responses into actionable data
+- **Context management**: Providing relevant customer information
+- **Tone adaptation**: Matching response style to urgency
 
-### Premium Partners
+## 🛠️ Tech Stack
 
-- **[Vehikl](https://vehikl.com)**
-- **[Tighten Co.](https://tighten.co)**
-- **[Kirschbaum Development Group](https://kirschbaumdevelopment.com)**
-- **[64 Robots](https://64robots.com)**
-- **[Curotec](https://www.curotec.com/services/technologies/laravel)**
-- **[DevSquad](https://devsquad.com/hire-laravel-developers)**
-- **[Redberry](https://redberry.international/laravel-development)**
-- **[Active Logic](https://activelogic.com)**
+- **Framework**: Laravel 12.x
+- **Language**: PHP 8.2+
+- **Database**: MySQL 8.0
+- **AI API**: Groq (Llama 3.3 70B Versatile)
+- **Frontend**: Blade Templates + Tailwind CSS
+- **HTTP Client**: Guzzle (via Laravel HTTP)
 
-## Contributing
+## 📋 Prerequisites
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+- PHP 8.1 or higher
+- Composer
+- MySQL 8.0 or higher
+- Groq API Key ([Get one free](https://console.groq.com))
 
-## Code of Conduct
+## 🚀 Installation
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+### 1. Clone the repository
+```bash
+git clone https://github.com/ik-manuel/complaint-ai.git
+cd complaint-ai
+```
 
-## Security Vulnerabilities
+### 2. Install dependencies
+```bash
+composer install
+```
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
+### 3. Configure environment
+```bash
+cp .env.example .env
+php artisan key:generate
+```
 
-## License
+### 4. Update `.env` with your credentials
+```env
+DB_DATABASE=complaint_ai
+DB_USERNAME=your_username
+DB_PASSWORD=your_password
 
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+GROQ_API_KEY=your_groq_api_key_here
+GROQ_MODEL=llama-3.3-70b-versatile
+```
+
+### 5. Create database
+```bash
+mysql -u root -p
+CREATE DATABASE complaint_ai;
+exit;
+```
+
+### 6. Run migrations
+```bash
+php artisan migrate
+```
+
+### 7. (Optional) Seed demo data
+```bash
+php artisan db:seed
+```
+
+### 8. Start the server
+```bash
+php artisan serve
+```
+
+Visit: `http://localhost:8000`
+
+## 📖 Usage
+
+### **For Customers**
+
+1. Navigate to the homepage
+2. Fill in your details and complaint message
+3. Submit and receive a ticket number
+4. AI analyzes your complaint instantly
+5. Receive response after admin approval
+
+### **For Admins**
+
+1. Visit `/admin` dashboard
+2. Review AI-classified complaints
+3. See AI-generated responses
+4. Edit responses if needed
+5. Approve and send to customer
+6. Mark as resolved when complete
+
+## 🎨 Screenshots
+
+### Customer Submission Form
+![Submission Form](docs/screenshots/submission-form.jpg)
+
+### AI Classification Result
+![Classification](docs/screenshots/classification.jpg)
+
+### Admin Dashboard
+![Dashboard](docs/screenshots/dashboard.jpg)
+
+### AI Response Review
+![Response Review](docs/screenshots/response-review.jpg)
+![Response Review](docs/screenshots/response-approved.jpg)
+
+## 🧪 How It Works
+
+### **1. Complaint Classification**
+
+Uses few-shot prompting with temperature 0.1 for consistent results:
+```php
+$prompt = "Classify this customer complaint.
+
+Examples:
+Complaint: \"My order hasn't arrived in 3 weeks! This is unacceptable!\"
+Urgency: high
+Category: shipping
+
+Now classify:
+Subject: {$subject}
+Message: {$message}";
+```
+
+### **2. Response Generation**
+
+Applies role-based prompting with temperature 0.3 for balanced creativity:
+```php
+// Different system messages for each urgency level
+$systemMessage = match($urgency) {
+    'high' => "You are a senior customer service manager handling urgent complaints. 
+               Be direct, empathetic, and action-oriented.",
+    'medium' => "You are a professional customer support agent. 
+                 Be helpful, clear, and solution-focused.",
+    'low' => "You are a friendly customer support representative. 
+              Be warm, patient, and informative."
+};
+```
+
+## 📊 Database Schema
+```
+customers
+├─ id
+├─ name
+├─ email
+└─ created_at
+
+complaints
+├─ id
+├─ customer_id (FK)
+├─ ticket_number
+├─ subject
+├─ message
+├─ urgency (low/medium/high)
+├─ category
+├─ status (new/responded/resolved)
+└─ created_at
+
+ai_responses
+├─ id
+├─ complaint_id (FK)
+├─ response_text
+├─ tokens_used
+├─ approved (boolean)
+└─ created_at
+```
+
+## 🔧 Configuration
+
+### AI Settings (`.env`)
+```env
+GROQ_API_KEY=your_key_here
+GROQ_MODEL=llama-3.3-70b-versatile
+
+# Optional: Adjust AI behavior
+AI_CLASSIFICATION_TEMPERATURE=0.1
+AI_GENERATION_TEMPERATURE=0.3
+AI_MAX_TOKENS=500
+```
+
+## 📈 Performance & Costs
+
+**Average Processing:**
+- Classification: ~50-100 tokens
+- Response generation: ~200-300 tokens
+- Total per complaint: ~300-400 tokens
+
+**Costs (Groq Free Tier):**
+- ✅ Free: 14,400 requests/day
+- ✅ Plenty for learning and demos
+- ✅ Production: Minimal cost (~$0.01 per complaint on paid tiers)
+
+## 🧪 Testing
+```bash
+# Run tests
+php artisan test
+
+# Test AI integration specifically
+php artisan test --filter=AIIntegrationTest
+```
+
+## 🚧 Roadmap (Future Enhancements)
+
+- [ ] **Week 3**: Add conversation memory for follow-ups
+- [ ] **Week 4**: Implement function calling for database queries
+- [ ] **Week 8**: RAG system for policy document retrieval
+- [ ] Multi-language support
+- [ ] Email integration (auto-send responses)
+- [ ] Sentiment analysis visualization
+- [ ] Customer satisfaction tracking
+- [ ] API for third-party integrations
+
+## 🤝 Contributing
+
+This is a learning project, but contributions are welcome! Please:
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📚 Learning Resources
+
+This project was built while following an AI Engineering learning path:
+
+- [OpenAI API Documentation](https://platform.openai.com/docs)
+- [Groq Documentation](https://console.groq.com/docs)
+- [Anthropic Prompt Engineering Guide](https://docs.anthropic.com/en/docs/prompt-engineering)
+- [Laravel Documentation](https://laravel.com/docs)
+
+## 📝 License
+
+This project is open-sourced under the MIT License. See [LICENSE](LICENSE) file for details.
+
+## 👨‍💻 Author
+
+**Ikechukwu A. Manuel**  
+- GitHub: [@ik-manuel](https://github.com/ik-manuel)
+- LinkedIn: [Ikechukwu Anigbata](https://linkedin.com/in/ik-manuel)
+- Email: williamikechukwu@gmail.com
+
+## 🙏 Acknowledgments
+
+- Built with [Groq](https://groq.com) for fast LLM inference
+- Powered by [Llama 3.3](https://ai.meta.com/llama/) from Meta
+- UI components styled with [Tailwind CSS](https://tailwindcss.com)
+
+---
+
+**⭐ If you found this project helpful, please give it a star!**
+
+Built with ❤️ as part of AI Engineering learning journey
