@@ -49,7 +49,7 @@ This project showcases fundamental AI engineering concepts:
 
 ## 📋 Prerequisites
 
-- PHP 8.1 or higher
+- PHP 8.2 or higher
 - Composer
 - MySQL 8.0 or higher
 - Groq API Key ([Get one free](https://console.groq.com))
