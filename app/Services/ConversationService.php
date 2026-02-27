@@ -122,13 +122,16 @@ class ConversationService
             ->where('role', '!=', 'system')
             ->count();
         
-        $skipCount = max(0, $totalMessages - 10);
+        // Dynamic window size!
+        $windowSize = $this->getRecentMessageWindow($totalMessages);
+        
+        $skipCount = max(0, $totalMessages - $windowSize);
 
         $recentMessages = $conversation->messages()
             ->where('role', '!=', 'system')
             ->orderBy('created_at', 'asc') 
-            ->skip($skipCount)  // Skip older messages
-            ->take(10)  // Take last 10
+            ->skip($skipCount) 
+            ->take($windowSize) 
             ->get();
 
         foreach ($recentMessages as $message) {
@@ -155,38 +158,84 @@ class ConversationService
     }
 
     /**
-     * Week 3 Day 3: Summarize conversation to reduce token usage
+     * Dynamic window size based on conversation length
+     */
+    private function getRecentMessageWindow(int $totalMessages): int
+    {
+        return match(true) {
+            $totalMessages < 15 => min($totalMessages, 10),  // All or 10
+            $totalMessages < 30 => 12,   // Small: 12 messages
+            $totalMessages < 50 => 15,   // Medium: 15 messages
+            $totalMessages < 100 => 20,  // Large: 20 messages
+            default => 25,               // Very large: 25 messages
+        };
+    }
+
+    /**
+     * Summarize conversation to reduce token usage
      */
     public function summarizeConversation(Conversation $conversation): string
     {
-        // Get all messages except recent 5 (We'll keep those in full)
-        $messagesToSummarize = $conversation->messages()
+        $totalMessages = $conversation->messages()
             ->where('role', '!=', 'system')
-            ->orderBy('created_at', 'asc')
-            ->limit($conversation->messages()->count() - 5)
-            ->get();
+            ->count();
 
-        if ($messagesToSummarize->count() < 5) {
-            // Too few messages to summarize
+        if ($totalMessages < 15) {
             return '';
         }
 
-        // Build conversation text
+        // Use dynamic window size
+        $windowSize = $this->getRecentMessageWindow($totalMessages);
+        $messagesToSummarizeCount = $totalMessages - $windowSize;
+
+        if ($messagesToSummarizeCount < 5) {
+            return '';
+        }
+
+        // Check if this is first summarization or re-summarization
+        $isFirstSummarization = empty($conversation->summary);
+        
+        if ($isFirstSummarization) {
+            // First time: Summarize all messages up to window
+            return $this->performFirstSummarization($conversation, $messagesToSummarizeCount, $windowSize);
+        } else {
+            // Re-summarization: Only summarize NEW messages
+            return $this->performSmartReSummarization($conversation, $messagesToSummarizeCount, $windowSize);
+        }
+
+    }
+
+    /**
+     * First time summarization - summarize all old messages
+     */
+    private function performFirstSummarization(Conversation $conversation, int $count, int $windowSize): string
+    {
+        \Log::info('First summarization:', [
+            'messages_to_summarize' => $count,
+            'window_size' => $windowSize,
+        ]);
+
+        $messagesToSummarize = $conversation->messages()
+            ->where('role', '!=', 'system')
+            ->orderBy('created_at', 'asc')
+            ->limit($count)
+            ->get();
+
         $conversationText = '';
         foreach ($messagesToSummarize as $message) {
             $role = $message->role === 'user' ? 'Customer' : 'Support';
             $conversationText .= "{$role}: {$message->content}\n\n";
         }
 
-        // Create summarization prompt
         $prompt = "Summarize this customer support conversation concisely.
+
             Include:
             - Main issue/complaint
-            - Key facts mentioned (order numbers, dates, etc.)
+            - Key facts (order numbers, dates, product names)
             - Steps already taken
-            - Current status
+            - Important outcomes
 
-            Keep it under 150 words.
+            Keep under 150 words.
 
             Conversation:
             {$conversationText}
@@ -195,21 +244,112 @@ class ConversationService
 
         try {
             $result = $this->groq->chat($prompt, [
-                'temperature' => 0.1, // Low temp for factual summary
-                'max_tokens'  => 300,
+                'temperature' => 0.1,
+                'max_tokens' => 300,
             ]);
 
-            // Save summary
             $conversation->update([
-                'summary'            => $result['content'],
+                'summary' => $result['content'],
+                'messages_summarized_count' => $count,
                 'last_summarized_at' => now(),
+            ]);
+
+            \Log::info('First summary created', [
+                'messages_summarized' => $count,
+                'tokens_used' => $result['tokens'],
             ]);
 
             return $result['content'];
 
         } catch (\Exception $e) {
-            \Log::error('Summarization failed: ' . $e->getMessage());
+            \Log::error('First summarization failed:', [
+                'error' => $e->getMessage(),
+            ]);
             return '';
+        }
+
+    }
+
+
+    /**
+     * Smart re-summarization - only summarize NEW messages since last summary
+     */
+    private function performSmartReSummarization(Conversation $conversation, int $newCount, int $windowSize): string
+    {
+        $previouslySummarized = $conversation->messages_summarized_count;
+        $newMessagesToSummarize = $newCount - $previouslySummarized;
+
+        if ($newMessagesToSummarize < 5) {
+            \Log::info('Not enough new messages for re-summarization', [
+                'new_messages' => $newMessagesToSummarize,
+            ]);
+            return $conversation->summary; // Return existing summary
+        }
+
+        \Log::info('Smart re-summarization:', [
+            'previously_summarized' => $previouslySummarized,
+            'new_to_summarize' => $newMessagesToSummarize,
+            'total_in_new_summary' => $newCount,
+        ]);
+
+        // Get only NEW messages that weren't in previous summary
+        $newMessages = $conversation->messages()
+            ->where('role', '!=', 'system')
+            ->orderBy('created_at', 'asc')
+            ->skip($previouslySummarized)
+            ->limit($newMessagesToSummarize)
+            ->get();
+
+        $newConversationText = '';
+        foreach ($newMessages as $message) {
+            $role = $message->role === 'user' ? 'Customer' : 'Support';
+            $newConversationText .= "{$role}: {$message->content}\n\n";
+        }
+
+        $prompt = "You previously created this summary of a customer conversation:
+
+            PREVIOUS SUMMARY:
+            {$conversation->summary}
+
+            Now there are NEW messages in the conversation:
+
+            NEW MESSAGES:
+            {$newConversationText}
+
+            Create an UPDATED summary that:
+            1. Keeps important information from the previous summary
+            2. Integrates the new information
+            3. Maintains chronological flow
+            4. Stays under 200 words
+
+            UPDATED SUMMARY:";
+
+        try {
+            $result = $this->groq->chat($prompt, [
+                'temperature' => 0.1,
+                'max_tokens' => 400, // Slightly more for merged summary
+            ]);
+
+            $conversation->update([
+                'summary' => $result['content'],
+                'messages_summarized_count' => $newCount,
+                'last_summarized_at' => now(),
+            ]);
+
+            \Log::info('Smart re-summarization complete', [
+                'new_messages_processed' => $newMessagesToSummarize,
+                'total_now_summarized' => $newCount,
+                'tokens_used' => $result['tokens'],
+                'token_savings' => 'Only processed ' . $newMessagesToSummarize . ' messages instead of ' . $newCount,
+            ]);
+
+            return $result['content'];
+
+        } catch (\Exception $e) {
+            \Log::error('Smart re-summarization failed:', [
+                'error' => $e->getMessage(),
+            ]);
+            return $conversation->summary; // Return existing summary on error
         }
     }
 
@@ -221,16 +361,9 @@ class ConversationService
         $messageCount = $conversation->messages()
             ->where('role', '!=', 'system')
             ->count();
-        
-        \Log::info('Checking summarization:', [
-            'message_count' => $messageCount,
-            'last_summarized' => $conversation->last_summarized_at,
-            'has_summary' => !empty($conversation->summary),
-        ]);
 
         // Never summarized before and have enough messages
         if (empty($conversation->summary) && $messageCount >= 15) {
-            \Log::info('First time summarization triggered');
             return true;
         }
 
@@ -241,12 +374,9 @@ class ConversationService
                 ->where('role', '!=', 'system')
                 ->where('created_at', '>', $conversation->last_summarized_at)
                 ->count();
-            
-            \Log::info('Messages since last summary: ' . $messagesSinceLastSummary);
-            
+                        
             // Re-summarize every 15 new messages
             if ($messagesSinceLastSummary >= 15) {
-                \Log::info('Re-summarization triggered');
                 return true;
             }
         }

@@ -56,23 +56,48 @@
     </div>
 
 
+    @if($complaint->conversation && $complaint->conversation->summary)
+    <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+        <div class="flex items-start justify-between mb-3">
+            <div>
+                <span class="text-purple-700 font-semibold">📝 AI Summary (Advanced Features)</span>
+                <span class="text-xs text-purple-600 block mt-1">
+                    Last updated: {{ $complaint->conversation->last_summarized_at->diffForHumans() }}
+                </span>
+            </div>
+            <div class="text-xs text-purple-600 text-right">
+                <div>📊 {{ $complaint->conversation->messages_summarized_count }} messages summarized</div>
+                <div>💬 {{ $complaint->conversation->messages()->count() }} total messages</div>
+                @php
+                    $windowSize = match(true) {
+                        $complaint->conversation->messages()->count() < 15 => 10,
+                        $complaint->conversation->messages()->count() < 30 => 12,
+                        $complaint->conversation->messages()->count() < 50 => 15,
+                        $complaint->conversation->messages()->count() < 100 => 20,
+                        default => 25,
+                    };
+                @endphp
+                <div>🪟 Window size: {{ $windowSize }} messages</div>
+            </div>
+        </div>
+        <p class="text-sm text-purple-900 italic bg-white rounded p-3">{{ $complaint->conversation->summary }}</p>
+        
+        <!-- Advanced Features Badge -->
+        <div class="mt-3 flex gap-2">
+            <span class="text-xs px-2 py-1 bg-purple-200 text-purple-800 rounded">Dynamic Window</span>
+            <span class="text-xs px-2 py-1 bg-purple-200 text-purple-800 rounded">Smart Re-summarization</span>
+            <span class="text-xs px-2 py-1 bg-green-200 text-green-800 rounded">
+                Token Efficient
+            </span>
+        </div>
+    </div>
+    @endif
+    
+
     <!-- Conversation History -->
     @if($complaint->conversation && $complaint->conversation->messages->count() > 0)
     <div class="bg-white rounded-lg shadow-md p-8 mb-6">
         <h3 class="text-xl font-bold text-gray-800 mb-4">💬 Full Conversation History</h3>
-
-        <!-- Summary Section (NEW) -->
-        @if($complaint->conversation->summary)
-        <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
-            <div class="flex items-start gap-2 mb-2">
-                <span class="text-purple-700 font-semibold">📝 AI Summary:</span>
-                <span class="text-xs text-purple-600">
-                    (Last updated: {{ $complaint->conversation->last_summarized_at->diffForHumans() }})
-                </span>
-            </div>
-            <p class="text-sm text-purple-900 italic">{{ $complaint->conversation->summary }}</p>
-        </div>
-        @endif
         
         <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
             <div class="grid grid-cols-3 gap-4 text-sm">

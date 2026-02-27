@@ -12,6 +12,7 @@ class Conversation extends Model
         'complaint_id',
         'system_prompt',
         'summary',
+        'messages_summarized_count',
         'total_tokens',
         'last_summarized_at',
     ];

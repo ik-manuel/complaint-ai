@@ -23,72 +23,66 @@ Route::prefix('admin')->name('admin.')->group(function () {
 });
 
 
-// Test
-Route::get('/force-summarize/{complaint}', function(\App\Models\Complaint $complaint) {
+
+Route::get('/test-dynamic-window', function() {
     $conversationService = app(\App\Services\ConversationService::class);
     
-    if (!$complaint->conversation) {
-        return response()->json(['error' => 'No conversation found']);
+    // Test with different conversation lengths
+    $testCases = [
+        ['messages' => 10, 'expected_window' => 10],
+        ['messages' => 20, 'expected_window' => 12],
+        ['messages' => 40, 'expected_window' => 15],
+        ['messages' => 80, 'expected_window' => 20],
+        ['messages' => 150, 'expected_window' => 25],
+    ];
+    
+    $results = [];
+    foreach ($testCases as $test) {
+        $reflection = new ReflectionClass($conversationService);
+        $method = $reflection->getMethod('getRecentMessageWindow');
+        $method->setAccessible(true);
+        
+        $window = $method->invoke($conversationService, $test['messages']);
+        
+        $results[] = [
+            'total_messages' => $test['messages'],
+            'window_size' => $window,
+            'coverage' => round(($window / $test['messages']) * 100, 1) . '%',
+            'expected' => $test['expected_window'],
+            'correct' => $window === $test['expected_window'] ? '✓' : '✗',
+        ];
     }
-
-    $messageCount = $complaint->conversation->messages()->count();
     
-    // Force summarization
-    $summary = $conversationService->summarizeConversation($complaint->conversation);
-    
-    return response()->json([
-        'success' => true,
-        'message_count' => $messageCount,
-        'summary' => $summary,
-        'conversation_id' => $complaint->conversation->id,
-    ]);
+    return response()->json($results);
 });
 
 
-// Test
-Route::get('/test-summarization', function () {
-    // Find a conversation or create one
-    $conversation = \App\Models\Conversation::first();
-    
-    if (!$conversation) {
-        return response()->json(['error' => 'No conversations found. Submit a complaint first.']);
+Route::get('/test-smart-resummarize/{complaint}', function(\App\Models\Complaint $complaint) {
+    if (!$complaint->conversation) {
+        return response()->json(['error' => 'No conversation']);
     }
-
-    // Add some test messages to trigger summarization
+    
     $conversationService = app(\App\Services\ConversationService::class);
+    $conversation = $complaint->conversation;
     
-    $testMessages = [
-        "The power button doesn't respond",
-        "I tried holding it for 10 seconds",
-        "Still nothing happens",
-        "Should I try removing the battery?",
-        "I removed the battery, still not working",
-        "What about trying a different power adapter?",
-        "Tried different adapter, no change",
-        "Is the warranty still valid?",
-        "When can I send it for repair?",
-        "How long will repair take?",
+    $before = [
+        'summary' => $conversation->summary,
+        'messages_summarized' => $conversation->messages_summarized_count,
+        'total_messages' => $conversation->messages()->count(),
     ];
-
-    foreach ($testMessages as $msg) {
-        $conversationService->addMessage($conversation, 'user', $msg);
-        $conversationService->addMessage($conversation, 'assistant', "Let me help with that. " . $msg);
-    }
-
-    // Trigger summarization
-    if ($conversationService->shouldSummarize($conversation)) {
-        $summary = $conversationService->summarizeConversation($conversation);
-        
-        return response()->json([
-            'success' => true,
-            'message_count' => $conversation->messages()->count(),
-            'summary' => $summary,
-            'tokens_saved' => 'Sending 10 recent messages + summary instead of all ' . $conversation->messages()->count() . ' messages',
-        ]);
-    }
-
+    
+    // Force re-summarization
+    $newSummary = $conversationService->summarizeConversation($conversation);
+    
+    $after = [
+        'summary' => $newSummary,
+        'messages_summarized' => $conversation->fresh()->messages_summarized_count,
+        'total_messages' => $conversation->messages()->count(),
+    ];
+    
     return response()->json([
-        'message' => 'Not enough messages for summarization yet',
-        'current_count' => $conversation->messages()->count(),
+        'before' => $before,
+        'after' => $after,
+        'type' => empty($before['summary']) ? 'first_summarization' : 'smart_re_summarization',
     ]);
 });

@@ -6,27 +6,63 @@ ComplaintAI follows a service-oriented architecture with clear separation of con
 
 ## Architecture Diagram
 ```
-┌─────────────────┐
-│  Public Form    │
-│  (Customer)     │
-└────────┬────────┘
-         │ POST /complaints
-         ▼
-┌─────────────────────────────┐
-│  ComplaintController        │
-│  • Validates input          │
-│  • Creates customer/complaint│
-└────────┬────────────────────┘
-         │
-         ├─> ComplaintClassifier (AI)
-         │   └─> GroqService (API)
-         │       • Temperature: 0.1
-         │       • Few-shot prompting
-         │
-         └─> ResponseGenerator (AI)
-             └─> GroqService (API)
-                 • Temperature: 0.3
-                 • Role-based prompting
+┌─────────────────────────────────────────────────────────────┐
+│                    COMPLAINT SUBMISSION                      │
+│  Customer submits complaint → Stored in DB                  │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│              AI CLASSIFICATION (Week 2)                      │
+│  • Few-shot prompting (Temp 0.1)                            │
+│  • Detects: Urgency + Category                              │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│         CONVERSATION CREATION (Week 3)                       │
+│  • Creates conversation record                               │
+│  • Sets role-based system prompt                             │
+│  • Stores initial message                                    │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│           INITIAL AI RESPONSE (Week 2)                       │
+│  • Role-based prompting (Temp 0.3)                          │
+│  • Tone matches urgency                                      │
+│  • Saved to conversation history                             │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│              FOLLOW-UP MESSAGES (Week 3)                     │
+│  • Customer sends follow-up                                  │
+│  • System retrieves conversation history                     │
+│  • Dynamic window size (10-25 messages)                      │
+│  • Includes summary if exists                                │
+│  • AI responds with full context                             │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│         AUTO-SUMMARIZATION (Week 3 Advanced)                 │
+│  • Triggers at 15, 30, 45... messages                       │
+│  • First time: Summarize all old messages                    │
+│  • Re-summarization: Only new messages (smart!)              │
+│  • Merges with existing summary                              │
+│  • Excludes recent window (no redundancy)                    │
+└────────────────────────┬────────────────────────────────────┘
+                         │
+                         ▼
+┌─────────────────────────────────────────────────────────────┐
+│              ADMIN REVIEW & APPROVAL                         │
+│  • View full conversation thread                             │
+│  • See summary + individual messages                         │
+│  • Token usage tracking                                      │
+│  • Edit/approve responses                                    │
+│  • Mark as resolved                                          │
+└─────────────────────────────────────────────────────────────┘
 ```
 
 ## Service Layer
