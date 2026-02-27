@@ -238,7 +238,7 @@ php artisan test --filter=AIIntegrationTest
 
 ## 🚧 Roadmap (Future Enhancements)
 
-- [ ] **Week 3**: Add conversation memory for follow-ups
+- [x] **Week 3**: Add conversation memory for follow-ups
 - [ ] **Week 4**: Implement function calling for database queries
 - [ ] **Week 8**: RAG system for policy document retrieval
 - [ ] Multi-language support
