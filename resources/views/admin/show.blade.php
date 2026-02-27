@@ -55,6 +55,68 @@
         </div>
     </div>
 
+
+    <!-- Conversation History -->
+    @if($complaint->conversation && $complaint->conversation->messages->count() > 0)
+    <div class="bg-white rounded-lg shadow-md p-8 mb-6">
+        <h3 class="text-xl font-bold text-gray-800 mb-4">💬 Full Conversation History</h3>
+
+        <!-- Summary Section (NEW) -->
+        @if($complaint->conversation->summary)
+        <div class="bg-purple-50 border border-purple-200 rounded-lg p-4 mb-4">
+            <div class="flex items-start gap-2 mb-2">
+                <span class="text-purple-700 font-semibold">📝 AI Summary:</span>
+                <span class="text-xs text-purple-600">
+                    (Last updated: {{ $complaint->conversation->last_summarized_at->diffForHumans() }})
+                </span>
+            </div>
+            <p class="text-sm text-purple-900 italic">{{ $complaint->conversation->summary }}</p>
+        </div>
+        @endif
+        
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+            <div class="grid grid-cols-3 gap-4 text-sm">
+                <div>
+                    <span class="text-blue-600 font-semibold">Messages:</span>
+                    <span class="text-blue-800">{{ $complaint->conversation->messages->count() }}</span>
+                </div>
+                <div>
+                    <span class="text-blue-600 font-semibold">Total Tokens:</span>
+                    <span class="text-blue-800">{{ $complaint->conversation->total_tokens }}</span>
+                </div>
+                <div>
+                    <span class="text-blue-600 font-semibold">Avg per message:</span>
+                    <span class="text-blue-800">
+                        {{ round($complaint->conversation->total_tokens / $complaint->conversation->messages->count()) }}
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <div class="space-y-3 max-h-96 overflow-y-auto">
+            @foreach($complaint->conversation->messages as $message)
+                @if($message->role !== 'system')
+                    <div class="border-l-4 pl-4 py-2
+                        {{ $message->role === 'user' ? 'border-blue-500 bg-blue-50' : 'border-gray-500 bg-gray-50' }}
+                    ">
+                        <div class="flex justify-between items-start mb-1">
+                            <span class="text-xs font-semibold
+                                {{ $message->role === 'user' ? 'text-blue-800' : 'text-gray-700' }}
+                            ">
+                                {{ $message->role === 'user' ? '👤 Customer' : '🤖 AI Assistant' }}
+                            </span>
+                            <span class="text-xs text-gray-500">
+                                {{ $message->created_at->format('M d, H:i') }} | {{ $message->tokens }} tokens
+                            </span>
+                        </div>
+                        <p class="text-sm text-gray-800 whitespace-pre-wrap">{{ $message->content }}</p>
+                    </div>
+                @endif
+            @endforeach
+        </div>
+    </div>
+    @endif
+
     <!-- AI Generated Response -->
     @if($complaint->aiResponse)
     <div class="bg-white rounded-lg shadow-md p-8">

@@ -48,7 +48,12 @@
     </p>
 
     <div class="space-x-4">
-        <a href="{{ route('complaint.create') }}" class="inline-block bg-gray-200 text-gray-800 px-6 py-2 rounded-lg hover:bg-gray-300 transition">
+        <a href="{{ route('complaint.conversation', $complaint->ticket_number) }}" 
+        class="inline-block bg-blue-600 text-white px-6 py-2 rounded-lg hover:bg-blue-700 transition">
+            💬 Continue Conversation
+        </a>
+        <a href="{{ route('complaint.create') }}" 
+        class="inline-block bg-gray-200 text-gray-800 px-6 py-2 rounded-lg hover:bg-gray-300 transition">
             Submit Another
         </a>
     </div>

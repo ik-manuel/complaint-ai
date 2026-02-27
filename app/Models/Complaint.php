@@ -32,6 +32,11 @@ class Complaint extends Model
         return $this->belongsTo(Customer::class);
     }
 
+    public function conversation(): HasOne
+    {
+        return $this->hasOne(Conversation::class);
+    }
+
     public function aiResponse(): HasOne
     {
         return $this->hasOne(AiResponse::class);
