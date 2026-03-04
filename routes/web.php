@@ -24,6 +24,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
 
 
 
+// TEST
 Route::get('/test-dynamic-window', function() {
     $conversationService = app(\App\Services\ConversationService::class);
     
@@ -84,5 +85,105 @@ Route::get('/test-smart-resummarize/{complaint}', function(\App\Models\Complaint
         'before' => $before,
         'after' => $after,
         'type' => empty($before['summary']) ? 'first_summarization' : 'smart_re_summarization',
+    ]);
+});
+
+
+Route::get('/test-function-calling', function() {
+    $groq = new \App\Services\GroqService();
+    $toolService = new \App\Services\ToolService();
+    
+    // Get available tools
+    $tools = $toolService->getAvailableTools();
+    
+    // User question that requires calculation
+    // $messages = [
+    //     [
+    //         'role' => 'user',
+    //         'content' => 'What is the capital of Niger?'
+    //     ]
+    // ];
+
+    // THE ABOVE MESSAGE ARRAY ALLOW THE AI TO TRY TO USE TOOL FOR QUESTION THAT DOES NOT REQUIRE
+    // TOOL - I AM USING SYSTEM PROMPT APPROACH TO INSTRUCT IT ON WHEN TO AND WHEN NOT TO.
+    // THIS IS AS A RESULT WHEN THE AI TRY TO USE A SEARCH TOOL FOR QUESTION THAT DOES NOT REQUIRE 
+    // TOOL OR TOOL NOT DEFINE - EG 'WHAT IS THE CAPITAL OF NIGERIA?' > ERROR (TRIED USING TOOL)
+    // 'WHAT IS THE CAPITAL OF GHANA?' > ACCRA (RESPONDED WELL)
+
+    // Use system prompt for my accurate ai tool chioce
+    $messages = [
+        [
+            'role' => 'system',
+            'content' => 'You are a helpful assistant. Only use tools when:
+            1. You need to perform calculations (use calculate)
+            2. You need current time (use get_current_time)
+            3. You need to count characters (use get_string_length)
+            
+            For general knowledge questions (capitals, facts, definitions), answer directly from your knowledge without using tools.'
+        ],
+        [
+            'role' => 'user',
+            'content' => 'What is the capital of Nigeria?'
+        ]
+    ];
+    
+    \Log::info('Initial user message:', ['messages' => $messages]);
+    
+    // Step 1: Send to AI with tools
+    $response = $groq->chatWithTools($messages, $tools);
+    
+    \Log::info('AI Response:', $response);
+    
+    // Step 2: Check if AI wants to call a function
+    if ($response['tool_calls']) {
+        $toolCall = $response['tool_calls'][0];
+        $functionName = $toolCall['function']['name'];
+        $arguments = json_decode($toolCall['function']['arguments'], true);
+        
+        \Log::info('AI wants to call function:', [
+            'function' => $functionName,
+            'arguments' => $arguments,
+        ]);
+        
+        // Step 3: Execute the function
+        $functionResult = $toolService->executeTool($functionName, $arguments);
+        
+        \Log::info('Function result:', $functionResult);
+        
+        // Step 4: Add function result to conversation
+        $messages[] = [
+            'role' => 'assistant',
+            'content' => null,
+            'tool_calls' => $response['tool_calls'],
+        ];
+        
+        $messages[] = [
+            'role' => 'tool',
+            'tool_call_id' => $toolCall['id'],
+            'name' => $functionName,
+            'content' => json_encode($functionResult),
+        ];
+        
+        \Log::info('Messages with function result:', ['messages' => $messages]);
+        
+        // Step 5: Get final response from AI
+        $finalResponse = $groq->chatWithTools($messages, $tools);
+        
+        return response()->json([
+            'success' => true,
+            'ai_decided_to_use' => $functionName,
+            'function_arguments' => $arguments,
+            'function_result' => $functionResult,
+            'final_ai_response' => $finalResponse['content'],
+            'total_tokens' => $response['tokens'] + $finalResponse['tokens'],
+        ]);
+    }
+    
+    // If no function call, just return the response
+    return response()->json([
+        'success' => true,
+        'response' => $response['content'],
+        'tool_calls' => 'none',
+        'total_tokens' => $response['tokens'],
     ]);
 });
