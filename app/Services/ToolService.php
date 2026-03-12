@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\Complaint;
+use App\Models\Customer;
 use Throwable;
 use Exception;
 
@@ -13,17 +15,18 @@ class ToolService
     public function getAvailableTools(): array
     {
         return [
+            // Existing tools
             [
-                'type'  => 'function',
+                'type' => 'function',
                 'function' => [
                     'name' => 'calculate',
                     'description' => 'Perform basic mathematical calculations. Supports +, -, *, /',
-                    'parameters'  => [
+                    'parameters' => [
                         'type' => 'object',
                         'properties' => [
                             'expression' => [
                                 'type' => 'string',
-                                'description' => 'The mathematical expression to evaluate. e.g., "15 * 7" or "100 / 4" ',
+                                'description' => 'The mathematical expression to evaluate, e.g., "15 * 7" or "100 / 4"',
                             ],
                         ],
                         'required' => ['expression'],
@@ -34,13 +37,13 @@ class ToolService
                 'type' => 'function',
                 'function' => [
                     'name' => 'get_current_time',
-                    'description' => 'Get the current date and time',
-                    'parameters'  => [
+                    'description' => 'Get the current date and time. If no timezone is specified, returns UTC time.',
+                    'parameters' => [
                         'type' => 'object',
                         'properties' => [
                             'timezone' => [
                                 'type' => 'string',
-                                'description' => 'The timezone, e.g., "Africa/Lagos", "UTC" ',
+                                'description' => 'The timezone (optional). Examples: "Africa/Lagos", "America/New_York", "UTC".',
                             ],
                         ],
                         'required' => [],
@@ -63,7 +66,80 @@ class ToolService
                         'required' => ['text'],
                     ],
                 ],
-            ]
+            ],
+            
+            // NEW DATABASE TOOLS
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'get_complaint_by_ticket',
+                    'description' => 'Look up a complaint by its ticket number. Returns full complaint details including status, urgency, and AI responses.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'ticket_number' => [
+                                'type' => 'string',
+                                'description' => 'The ticket number in format TKT-XXXXX',
+                            ],
+                        ],
+                        'required' => ['ticket_number'],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'get_customer_complaints',
+                    'description' => 'Get all complaints submitted by a specific customer. Useful for seeing complaint history.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'email' => [ 
+                                'type' => 'string',
+                                'description' => 'The customer\'s email address',
+                            ],
+                        ],
+                        'required' => ['email'], 
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'search_complaints',
+                    'description' => 'Search for complaints by category, urgency, or status. Returns matching complaints.',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => [
+                            'category' => [
+                                'type' => 'string',
+                                'description' => 'Filter by category: billing, shipping, product_quality, technical, other',
+                            ],
+                            'urgency' => [
+                                'type' => 'string',
+                                'description' => 'Filter by urgency: low, medium, high',
+                            ],
+                            'status' => [
+                                'type' => 'string',
+                                'description' => 'Filter by status: new, responded, resolved',
+                            ],
+                        ],
+                        'required' => [],
+                    ],
+                ],
+            ],
+            [
+                'type' => 'function',
+                'function' => [
+                    'name' => 'get_complaint_statistics',
+                    'description' => 'Get statistics about complaints (total count, by status, by urgency, etc.)',
+                    'parameters' => [
+                        'type' => 'object',
+                        'properties' => (object)[],
+                        'required' => [],
+                    ],
+                ],
+            ],
         ];
     }
 
@@ -72,17 +148,175 @@ class ToolService
      */
     public function executeTool(string $functionName, array $arguments): array
     {
-        \Log::info('Executing tool:', [
-            'function'  => $functionName,
-            'arguments' => $arguments,
-        ]);
-
         return match($functionName) {
-            'calculate' => $this->calculate($arguments['expression']),
-            'get_current_time' => $this->getCurrentTime($arguments['timezone'] ?? 'UTC'),
-            'get_string_length' => $this->getStringLength($arguments['text']),
-            default => ['error' => 'Unknown function: ' . $functionName],
+            'calculate'                => $this->calculate($arguments['expression']),
+            'get_current_time'         => $this->getCurrentTime($arguments['timezone'] ?? null),
+            'get_string_length'        => $this->getStringLength($arguments['text']),
+
+            // Database tools
+            'get_complaint_by_ticket'  => $this->getComplaintByTicket($arguments['ticket_number']),
+            'get_customer_complaints'  => $this->getCustomerComplaints($arguments['email']),
+            'search_complaints'        => $this->searchComplaints($arguments),
+            'get_complaint_statistics' => $this->getComplaintStatistics(),
+
+            default => ['error'        => 'Unknown function: ' . $functionName],
         };
+    }
+
+    /**
+     * DATABASE TOOL: Get complaint by ticket number
+     */
+    private function getComplaintByTicket(string $ticketNumber): array
+    {
+        try {
+            $complaint = Complaint::where('ticket_number', $ticketNumber)
+                ->with(['customer', 'aiResponse'])
+                ->first();
+
+            if (!$complaint) {
+                return [
+                    'found'   => false,
+                    'message' => "No complaint found with ticket number: {$ticketNumber}",
+                ];
+            }
+
+            return [
+                'found'                => true,
+                'ticket_number'        => $complaint->ticket_number,
+                'subject'              => $complaint->subject,
+                'status'               => $complaint->status,
+                'urgency'              => $complaint->urgency,
+                'category'             => $complaint->category,
+                'customer_name'        => $complaint->customer->name,
+                'customer_email'       => $complaint->customer->email,
+                'submitted_at'         => $complaint->created_at->format('Y-m-d H:i:s'),
+                'has_ai_response'      => $complaint->aiResponse !== null,
+                'ai_response_approved' => $complaint->aiResponse?->approved ?? false,
+            ];
+
+        } catch (\Exception $e) {
+            return ['error' => 'Database error: ' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * DATABASE TOOL: Get all complaints for a customer
+     */
+    private function getCustomerComplaints(string $email): array
+    {
+        try {
+            // Validate input
+            if (empty($email)) {
+                return [
+                    'found' => false,
+                    'message' => 'Email address is required',
+                ];
+            }
+
+            $customer = Customer::where('email', $email)->first();
+
+            if (!$customer) {
+                return [
+                    'found'   => false,
+                    'message' => "No customer found with email: {$email}",
+                ];
+            }
+
+            $complaints = $customer->complaints()
+                ->orderBy('created_at', 'desc')
+                ->get()
+                ->map(function($c) {
+                    return [
+                        'ticket_number' => $c->ticket_number,
+                        'subject'       => $c->subject,
+                        'status'        => $c->status,
+                        'urgency'       => $c->urgency,
+                        'submitted_at'  => $c->created_at->format('y-m-d'),
+                    ];
+                });
+
+            return [
+                'found'            => true,
+                'customer_name'    => $customer->name,
+                'customer_email'   => $customer->email,
+                'total_complaints' => $complaints->count(),
+                'complaints'       => $complaints->toArray(),
+            ];
+
+        } catch (\Exception $e) {
+            return ['error' => 'Database error: ' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * DATABASE TOOL: Search complaints by criteria
+     */
+    private function searchComplaints(array $filters): array
+    {
+        try {
+            $query = Complaint::query();
+
+            if (isset($filters['category'])) {
+                $query->where('category', $filters['category']);
+            }
+            if (isset($filters['urgency'])) {
+                $query->where('urgency', $filters['urgency']);
+            }
+            if (isset($filters['status'])) {
+                $query->where('status', $filters['status']);
+            }
+
+            $complaints = $query->orderBy('created_at', 'desc')
+                ->limit(10)
+                ->get()
+                ->map(function($c) {
+                    return [
+                        'ticket_number' => $c->ticket_number,
+                        'subject'       => $c->subject,
+                        'status'        => $c->status,
+                        'urgency'       => $c->urgency,
+                        'category'      => $c->category,
+                    ];
+                });
+            
+            return [
+                'filters_applied' => $filters,
+                'results_count'   => $complaints->count(),
+                'complaints'      => $complaints->toArray(),
+            ];
+
+        } catch (\Exception $e) {
+            return ['error' => 'Database error: ' . $e->getMessage()];
+        }
+    }
+
+    /**
+     * DATABASE TOOL: Get complaint statistics
+     */
+    private function getComplaintStatistics(): array
+    {
+        try {
+            return [
+                'total_complaints' => Complaint::count(),
+                'by_status' => [
+                    'new'       => Complaint::where('status', 'new')->count(),
+                    'responded' => Complaint::where('status', 'responded')->count(),
+                    'resolved'  => Complaint::where('status', 'resolved')->count(),
+                ],
+                'by_urgency' => [
+                    'low'    => Complaint::where('urgency', 'low')->count(),
+                    'medium' => Complaint::where('urgency', 'medium')->count(),
+                    'high'   => Complaint::where('urgency', 'high')->count(),
+                ],
+                'by_category' => Complaint::select('category', \DB::raw('count(*) as count'))
+                    ->groupBy('category')
+                    ->pluck('count', 'category')
+                    ->toArray(),
+            ];
+
+        } catch (\Exception $e) {
+            return ['error' => 'Database error: ' . $e->getMessage()];
+        }
     }
 
     /**
@@ -112,19 +346,41 @@ class ToolService
     /**
      * Get current time tool implementation
      */
-    private function getCurrentTime(string $timezone): array
+    private function getCurrentTime($timezone = null): array
     {
         try {
-            $dt = new \DateTime('now', new \DateTimeZone($timezone));
-
+            // Default to UTC if no timezone provided
+            $tz = $timezone ?: 'UTC';
+            
+            \Log::info('Getting current time:', [
+                'timezone_requested' => $timezone,
+                'timezone_using' => $tz
+            ]);
+            
+            $dt = new \DateTime('now', new \DateTimeZone($tz));
+            
             return [
-                'timezone'  => $timezone,
+                'timezone' => $tz,
+                'datetime' => $dt->format('Y-m-d H:i:s'),
+                'timestamp' => $dt->getTimestamp(),
+                'formatted' => $dt->format('l, F j, Y \a\t g:i A T'),
+            ];
+
+        } catch (\Exception $e) {
+            // If invalid timezone, fall back to UTC
+            \Log::warning('Invalid timezone, using UTC:', [
+                'requested' => $timezone,
+                'error'     => $e->getMessage()
+            ]);
+            
+            $dt = new \DateTime('now', new \DateTimeZone('UTC'));
+            
+            return [
+                'timezone'  => 'UTC (fallback)',
                 'datetime'  => $dt->format('Y-m-d H:i:s'),
                 'timestamp' => $dt->getTimestamp(),
                 'formatted' => $dt->format('l, F j, Y \a\t g:i A T'),
             ];
-        } catch (\Exception $e) {
-            return ['error' => 'Invalid timezone: ' . $timezone];
         }
     }
 

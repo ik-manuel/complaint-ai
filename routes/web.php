@@ -89,101 +89,248 @@ Route::get('/test-smart-resummarize/{complaint}', function(\App\Models\Complaint
 });
 
 
-Route::get('/test-function-calling', function() {
+Route::get('/test-smart-tools', function() {
     $groq = new \App\Services\GroqService();
     $toolService = new \App\Services\ToolService();
+    $smartLoader = new \App\Services\SmartToolLoader($toolService);
     
-    // Get available tools
-    $tools = $toolService->getAvailableTools();
+    $question = request('q', 'Calculate 15% of 2000 and tell me the time');
     
-    // User question that requires calculation
-    // $messages = [
-    //     [
-    //         'role' => 'user',
-    //         'content' => 'What is the capital of Niger?'
-    //     ]
-    // ];
-
-    // THE ABOVE MESSAGE ARRAY ALLOW THE AI TO TRY TO USE TOOL FOR QUESTION THAT DOES NOT REQUIRE
-    // TOOL - I AM USING SYSTEM PROMPT APPROACH TO INSTRUCT IT ON WHEN TO AND WHEN NOT TO.
-    // THIS IS AS A RESULT WHEN THE AI TRY TO USE A SEARCH TOOL FOR QUESTION THAT DOES NOT REQUIRE 
-    // TOOL OR TOOL NOT DEFINE - EG 'WHAT IS THE CAPITAL OF NIGERIA?' > ERROR (TRIED USING TOOL)
-    // 'WHAT IS THE CAPITAL OF GHANA?' > ACCRA (RESPONDED WELL)
-
-    // Use system prompt for my accurate ai tool chioce
+    $relevantTools = $smartLoader->getRelevantTools($question);
+    
     $messages = [
         [
             'role' => 'system',
-            'content' => 'You are a helpful assistant. Only use tools when:
-            1. You need to perform calculations (use calculate)
-            2. You need current time (use get_current_time)
-            3. You need to count characters (use get_string_length)
-            
-            For general knowledge questions (capitals, facts, definitions), answer directly from your knowledge without using tools.'
+            'content' => 'You are a helpful assistant. 
+
+            IMPORTANT: When user asks multiple questions:
+            - Call ALL necessary tools at once
+            - For get_current_time: if no timezone mentioned, call it with empty arguments {} - it defaults to UTC
+            - Do NOT ask user for missing optional parameters - use the defaults
+
+            Available tools and their defaults:
+            - calculate: requires expression
+            - get_current_time: timezone optional (defaults to UTC)
+            - get_string_length: requires text'
         ],
         [
             'role' => 'user',
-            'content' => 'What is the capital of Nigeria?'
+            'content' => $question
         ]
     ];
     
-    \Log::info('Initial user message:', ['messages' => $messages]);
-    
-    // Step 1: Send to AI with tools
-    $response = $groq->chatWithTools($messages, $tools);
-    
-    \Log::info('AI Response:', $response);
-    
-    // Step 2: Check if AI wants to call a function
-    if ($response['tool_calls']) {
-        $toolCall = $response['tool_calls'][0];
-        $functionName = $toolCall['function']['name'];
-        $arguments = json_decode($toolCall['function']['arguments'], true);
-        
-        \Log::info('AI wants to call function:', [
-            'function' => $functionName,
-            'arguments' => $arguments,
+    if (empty($relevantTools)) {
+        $response = $groq->chat($question, [
+            'system' => 'You are a helpful assistant.'
         ]);
         
-        // Step 3: Execute the function
-        $functionResult = $toolService->executeTool($functionName, $arguments);
+        return response()->json([
+            'question' => $question,
+            'optimization' => 'no_tools_sent',
+            'answer' => $response['content'],
+            'tokens' => $response['tokens'],
+        ]);
+    }
+    
+    // First API call - AI decides which tools to use
+    $response = $groq->chatWithTools($messages, $relevantTools);
+    
+    // Check if AI wants to use tools
+    if ($response['tool_calls']) {
+        \Log::info('AI called tools:', [
+            'count' => count($response['tool_calls']),
+            'tools' => array_map(fn($t) => $t['function']['name'], $response['tool_calls'])
+        ]);
         
-        \Log::info('Function result:', $functionResult);
-        
-        // Step 4: Add function result to conversation
+        // Add AI's decision to call tools
         $messages[] = [
             'role' => 'assistant',
-            'content' => null,
+            'content' => $response['content'],
             'tool_calls' => $response['tool_calls'],
         ];
         
-        $messages[] = [
-            'role' => 'tool',
-            'tool_call_id' => $toolCall['id'],
-            'name' => $functionName,
-            'content' => json_encode($functionResult),
-        ];
+        // Execute ALL tool calls
+        foreach ($response['tool_calls'] as $toolCall) {
+            $functionName = $toolCall['function']['name'];
+            $arguments = json_decode($toolCall['function']['arguments'], true) ?: [];
+            
+            \Log::info('Executing tool:', [
+                'name' => $functionName,
+                'arguments' => $arguments
+            ]);
+            
+            $functionResult = $toolService->executeTool($functionName, $arguments);
+            
+            // Add tool result to conversation
+            $messages[] = [
+                'role' => 'tool',
+                'tool_call_id' => $toolCall['id'],
+                'name' => $functionName,
+                'content' => json_encode($functionResult),
+            ];
+        }
         
-        \Log::info('Messages with function result:', ['messages' => $messages]);
+        \Log::info('All tools executed, getting final answer');
         
-        // Step 5: Get final response from AI
-        $finalResponse = $groq->chatWithTools($messages, $tools);
+        // Second API call - AI generates final answer using all tool results
+        $finalResponse = $groq->chatWithTools($messages, $relevantTools);
         
         return response()->json([
-            'success' => true,
-            'ai_decided_to_use' => $functionName,
-            'function_arguments' => $arguments,
-            'function_result' => $functionResult,
-            'final_ai_response' => $finalResponse['content'],
+            'question' => $question,
+            'optimization' => 'relevant_tools_only',
+            'tools_sent' => count($relevantTools) . ' of ' . count($toolService->getAvailableTools()),
+            'tools_called' => array_map(fn($t) => $t['function']['name'], $response['tool_calls']),
+            'answer' => $finalResponse['content'],
             'total_tokens' => $response['tokens'] + $finalResponse['tokens'],
         ]);
     }
     
-    // If no function call, just return the response
     return response()->json([
-        'success' => true,
-        'response' => $response['content'],
-        'tool_calls' => 'none',
-        'total_tokens' => $response['tokens'],
+        'question' => $question,
+        'answer' => $response['content'],
+        'tokens' => $response['tokens'],
     ]);
+});
+
+
+// Database function call tools
+Route::get('/test-database-tools', function() {
+    $groq = new \App\Services\GroqService();
+    $toolService = new \App\Services\ToolService();
+    
+    $question = request('q', 'How many complaints do we have?');
+    
+    \Log::info('Database tool test:', ['question' => $question]);
+    
+    // Get all tools (for database queries, we need them)
+    $allTools = $toolService->getAvailableTools();
+    
+    $messages = [
+        [
+            'role' => 'system',
+            'content' => 'You are a helpful customer service assistant with access to the complaint database. 
+
+Use database tools to answer questions about complaints, customers, and statistics.
+
+Available database tools:
+- get_complaint_by_ticket: Look up a specific ticket by number
+- get_customer_complaints: Get all complaints for a customer email
+- search_complaints: Search by category, urgency, or status
+- get_complaint_statistics: Get overall statistics
+
+When tools return "found: false", tell the user the item was not found.'
+        ],
+        [
+            'role' => 'user',
+            'content' => $question
+        ]
+    ];
+    
+    try {
+        // First API call - AI decides which tools to use
+        $response = $groq->chatWithTools($messages, $allTools);
+        
+        \Log::info('Initial AI response:', [
+            'has_tool_calls' => isset($response['tool_calls']),
+            'tool_calls_count' => isset($response['tool_calls']) ? count($response['tool_calls']) : 0,
+        ]);
+        
+        // Check if AI wants to use tools
+        if (!empty($response['tool_calls'])) {
+            // Add AI's decision to messages
+            $messages[] = [
+                'role' => 'assistant',
+                'content' => $response['content'],
+                'tool_calls' => $response['tool_calls'],
+            ];
+            
+            // Execute ALL tool calls
+            foreach ($response['tool_calls'] as $toolCall) {
+                $functionName = $toolCall['function']['name'];
+                
+                // FIX: Handle null or empty arguments
+                $argumentsJson = $toolCall['function']['arguments'] ?? '{}';
+                $arguments = json_decode($argumentsJson, true) ?: [];
+                
+                \Log::info('Executing tool:', [
+                    'function' => $functionName,
+                    'arguments' => $arguments,
+                    'arguments_json' => $argumentsJson,
+                ]);
+                
+                try {
+                    $functionResult = $toolService->executeTool($functionName, $arguments);
+                    
+                    \Log::info('Tool result:', [
+                        'function' => $functionName,
+                        'result' => $functionResult,
+                    ]);
+                    
+                    // Add tool result to conversation
+                    $messages[] = [
+                        'role' => 'tool',
+                        'tool_call_id' => $toolCall['id'],
+                        'name' => $functionName,
+                        'content' => json_encode($functionResult),
+                    ];
+                    
+                } catch (\Exception $e) {
+                    \Log::error('Tool execution error:', [
+                        'function' => $functionName,
+                        'error' => $e->getMessage(),
+                    ]);
+                    
+                    // Add error as tool result
+                    $messages[] = [
+                        'role' => 'tool',
+                        'tool_call_id' => $toolCall['id'],
+                        'name' => $functionName,
+                        'content' => json_encode(['error' => $e->getMessage()]),
+                    ];
+                }
+            }
+            
+            \Log::info('All tools executed, getting final answer');
+            \Log::info('Messages being sent:', ['count' => count($messages)]);
+            
+            // Second API call - AI generates final answer using all tool results
+            $finalResponse = $groq->chatWithTools($messages, $allTools);
+            
+            \Log::info('Final AI response:', $finalResponse);
+            
+            return response()->json([
+                'success' => true,
+                'question' => $question,
+                'tools_used' => array_map(fn($t) => $t['function']['name'], $response['tool_calls']),
+                'answer' => $finalResponse['content'] ?? 'No answer generated',
+                'total_tokens' => ($response['tokens'] ?? 0) + ($finalResponse['tokens'] ?? 0),
+                'debug' => [
+                    'tool_calls_count' => count($response['tool_calls']),
+                    'messages_count' => count($messages),
+                    'finish_reason' => $finalResponse['finish_reason'] ?? null,
+                ]
+            ]);
+        }
+        
+        // No tools needed
+        return response()->json([
+            'success' => true,
+            'question' => $question,
+            'answer' => $response['content'],
+            'tokens' => $response['tokens'] ?? 0,
+            'tools_used' => 'none',
+        ]);
+        
+    } catch (\Exception $e) {
+        \Log::error('Database tools test error:', [
+            'error' => $e->getMessage(),
+            'trace' => $e->getTraceAsString(),
+        ]);
+        
+        return response()->json([
+            'success' => false,
+            'error' => $e->getMessage(),
+            'question' => $question,
+        ], 500);
+    }
 });

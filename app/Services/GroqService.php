@@ -41,7 +41,7 @@ class GroqService
         }
 
         $payload = [
-            'model' => $this->model,
+            'model'       => $this->model,
             'messages'    => $messages,
             'temperature' => $options['temperature'] ?? 0.3,
             'max_tokens'  => $options['max_tokens'] ?? 500,
