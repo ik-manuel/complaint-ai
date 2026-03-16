@@ -38,6 +38,12 @@
                                         <span class="text-xs font-semibold text-blue-800">You</span>
                                     @else
                                         <span class="text-xs font-semibold text-gray-700">🤖 Support AI</span>
+                                        <!-- NEW: Show if tools were used -->
+                                        @if(str_contains($message->content, 'ticket') || str_contains($message->content, 'complaint'))
+                                            <span class="text-xs bg-purple-200 text-purple-800 px-2 py-0.5 rounded">
+                                                🔧 Used database tools
+                                            </span>
+                                        @endif
                                     @endif
                                     <span class="text-xs text-gray-500">{{ $message->created_at->diffForHumans() }}</span>
                                 </div>

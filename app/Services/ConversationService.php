@@ -10,7 +10,11 @@ use Illuminate\Support\Facades\Log;
 
 class ConversationService
 {
-    public function __construct(private GroqService $groq) { }
+    public function __construct(
+        private GroqService $groq,
+        private ToolService $toolService,
+        private SmartToolLoader $smartToolLoader
+        ) { }
 
     /**
      * Create a new conversation for a complaint
@@ -91,6 +95,127 @@ class ConversationService
         $this->addMessage($conversation, 'assistant', $result['content']);
 
         return $result;
+    }
+
+    /**
+     * AI response with memory + smart tool loading!
+     */
+    public function getAiResponseWithTools(Conversation $conversation, string $userMessage): array
+    {
+        // Add user message
+   //     $this->addMessage($conversation, 'user', $userMessage);
+
+        // Summarize if needed
+        if ($this->shouldSummarize($conversation)) {
+            $this->summarizeConversation($conversation);
+        }
+
+        // Build conversation history
+        $messages = $this->buildMessagesForApi($conversation);
+
+        // Build context from complaint
+        $complaint = $conversation->complaint;
+        $context = [
+            'ticket_number'  => $complaint->ticket_number,
+            'customer_email' => $complaint->customer->email,
+        ];
+
+        // Smart tool loading - only relevant tools
+        // $tools = $this->smartToolLoader->getConversationTools($userMessage, $context);
+        // $tools = $this->smartToolLoader->getRelevantTools($userMessage);
+        $tools = $this->toolService->getAvailableTools();
+
+        \Log::info('ConversationService - Tools loaded:', [
+            'tools'   => array_map(fn($t) => $t['function']['name'], $tools),
+            'message' => $userMessage,
+        ]);
+
+        // Enrich system message with complaint context
+        // This helps AI know it can use the ticket/email without user having to specify
+        if (!empty($messages[0]) && $messages[0]['role'] === 'system') {
+            $messages[0]['content'] .= "\n\nCURRENT CONTEXT:
+                - Ticket Number: {$complaint->ticket_number}
+                - Customer Email: {$complaint->customer->email}
+                - Customer Name: {$complaint->customer->name}
+                
+                When user asks about 'my complaint', 'this complaint', 'the ticket', 'my status' -
+                use ticket number {$complaint->ticket_number} automatically.
+                When user asks about 'my history', 'my other complaints' -
+                use email {$complaint->customer->email} automatically.";
+        }
+
+        // First API call
+        $response = $this->groq->chatWithTools($messages, $tools, [
+            'temperature' => 0.3,
+            'max_token'   => 500,
+        ]);
+
+        $totalTokens = $response['tokens'];
+
+        // Handle tool calls if any
+        if (!empty($response['tool_calls'])) {
+            $messages[] = [
+                'role'       => 'assistant',
+                'content'    => $response['content'],
+                'tool_calls' => $response['tool_calls'],
+            ];
+
+            foreach ($response['tool_calls'] as $toolCall) {
+                $functionName = $toolCall['function']['name'];
+                $arguments = json_decode($toolCall['function']['arguments'], true) ?: [];
+
+                try {
+                    $toolResult = $this->toolService->executeTool($functionName, $arguments);
+
+                    $messages[] = [
+                        'role'         => 'tool',
+                        'tool_call_id' => $toolCall['id'],
+                        'name'         => $functionName,
+                        'content'      => json_encode($toolResult),
+                    ];
+                } catch (\Exception $e) {
+                    \Log::error('Tool failed in conversation:', [
+                        'function' => $functionName,
+                        'error'    => $e->getMessage(),
+                    ]);
+
+                    $messages[] = [
+                        'role'         => 'tool',
+                        'tool_call_id' => $toolCall['id'],
+                        'name'         => $functionName,
+                        'content'      => json_encode(['error' => $e->getMessage()]),
+                    ];
+                }
+            }
+        
+            // Second API call - generate final response
+            $finalResponse = $this->groq->chatWithTools($messages, $tools, [
+                'temperature' => 0.3,
+                'max_tokens'  => 500,
+            ]);
+
+            $totalTokens += $finalResponse['tokens'];
+
+dd($finalResponse['content']);
+
+            //Save final response
+            // $this->addMessage($conversation, 'assistant', $finalResponse['content']);
+
+            return [
+                'response'   => $finalResponse['content'],
+                'tokens'     => $totalTokens,
+                'tools_used' => array_map(fn($t) => $t['function']['name'], $response['tool_calls']),
+            ];
+        }
+
+        // No tools needed - save direct response
+        // $this->addMessage($conversation, 'assistant', $response['content']);
+dd($response['content']);
+        return [
+            'response'   => $response['content'],
+            'tokens'     => $totalTokens,
+            'tools_used' => [],
+        ];
     }
 
     /**

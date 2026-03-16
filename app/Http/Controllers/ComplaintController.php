@@ -58,13 +58,19 @@ class ComplaintController extends Controller
         }
 
         try {
-            // Feature: AI response with memory!
-            $result = $this->conversationService->getAiResponse(
+            // AI response with memory + tools!
+            $result = $this->conversationService->getAiResponseWithTools(
                 $conversation,
                 $validated['message']
             );
 
-            return back()->with('success', 'Message sent! AI is responding...');
+            // Show tools used in success message if any
+            $toolsMessage = '';
+            if (!empty($result['tools_used'])) {
+                $toolsMessage = ' (Used tools: ' . implode(', ', $result['tools_used']) . ')';
+            }
+
+            return back()->with('success', 'Message sent!' . $toolsMessage);
 
         } catch (\Exception $e) {
             return back()

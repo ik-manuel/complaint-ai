@@ -210,15 +210,15 @@ Route::get('/test-database-tools', function() {
             'role' => 'system',
             'content' => 'You are a helpful customer service assistant with access to the complaint database. 
 
-Use database tools to answer questions about complaints, customers, and statistics.
+                Use database tools to answer questions about complaints, customers, and statistics.
 
-Available database tools:
-- get_complaint_by_ticket: Look up a specific ticket by number
-- get_customer_complaints: Get all complaints for a customer email
-- search_complaints: Search by category, urgency, or status
-- get_complaint_statistics: Get overall statistics
+                Available database tools:
+                - get_complaint_by_ticket: Look up a specific ticket by number
+                - get_customer_complaints: Get all complaints for a customer email
+                - search_complaints: Search by category, urgency, or status
+                - get_complaint_statistics: Get overall statistics
 
-When tools return "found: false", tell the user the item was not found.'
+                When tools return "found: false", tell the user the item was not found.'
         ],
         [
             'role' => 'user',
@@ -234,7 +234,7 @@ When tools return "found: false", tell the user the item was not found.'
             'has_tool_calls' => isset($response['tool_calls']),
             'tool_calls_count' => isset($response['tool_calls']) ? count($response['tool_calls']) : 0,
         ]);
-        
+
         // Check if AI wants to use tools
         if (!empty($response['tool_calls'])) {
             // Add AI's decision to messages
@@ -295,7 +295,7 @@ When tools return "found: false", tell the user the item was not found.'
             
             // Second API call - AI generates final answer using all tool results
             $finalResponse = $groq->chatWithTools($messages, $allTools);
-            
+         
             \Log::info('Final AI response:', $finalResponse);
             
             return response()->json([
