@@ -103,7 +103,7 @@ class ConversationService
     public function getAiResponseWithTools(Conversation $conversation, string $userMessage): array
     {
         // Add user message
-   //     $this->addMessage($conversation, 'user', $userMessage);
+        $this->addMessage($conversation, 'user', $userMessage);
 
         // Summarize if needed
         if ($this->shouldSummarize($conversation)) {
@@ -121,51 +121,115 @@ class ConversationService
         ];
 
         // Smart tool loading - only relevant tools
-        // $tools = $this->smartToolLoader->getConversationTools($userMessage, $context);
-        // $tools = $this->smartToolLoader->getRelevantTools($userMessage);
-        $tools = $this->toolService->getAvailableTools();
+        $tools = $this->smartToolLoader->getConversationTools($userMessage, $context);
 
-        \Log::info('ConversationService - Tools loaded:', [
-            'tools'   => array_map(fn($t) => $t['function']['name'], $tools),
-            'message' => $userMessage,
-        ]);
+        // If no tools needed, skip tool calling entirely
+        if (empty($tools)) {
+            \Log::info('ConversationService - No tools needed, direct answer');
+
+            $response = $this->groq->chat($userMessage, [
+                'system'  => $messages[0]['content'] ?? 'You are a helpful assistant.',
+                'history' => array_slice($messages, 1), // conversation history
+            ]);
+
+            $this->addMessage($conversation, 'assistant', $response['content']);
+
+            return [
+                'response'   => $response['content'],
+                'tokens'     => $response['tokens'],
+                'tools_used' => [],
+            ];
+        }
 
         // Enrich system message with complaint context
         // This helps AI know it can use the ticket/email without user having to specify
         if (!empty($messages[0]) && $messages[0]['role'] === 'system') {
-            $messages[0]['content'] .= "\n\nCURRENT CONTEXT:
+            $messages[0]['content'] .= "\n\n
+                CURRENT COMPLAINT CONTEXT:
                 - Ticket Number: {$complaint->ticket_number}
                 - Customer Email: {$complaint->customer->email}
                 - Customer Name: {$complaint->customer->name}
                 
-                When user asks about 'my complaint', 'this complaint', 'the ticket', 'my status' -
-                use ticket number {$complaint->ticket_number} automatically.
-                When user asks about 'my history', 'my other complaints' -
-                use email {$complaint->customer->email} automatically.";
+                STRICT RULES:
+                1. Call ALL needed tools in ONE response - never split across rounds
+                2. After receiving tool results, always give a final text answer immediately
+                3. Never call a tool if you already have that data in the conversation
+                4. For greetings or thanks, answer directly without any tools
+                
+                RESPONSE RULES:
+                - Answer what was asked, then stop
+                - Do NOT ask follow-up questions unless the user seems confused
+                - Do NOT offer next steps unless the user asks
+                - Keep responses concise and factual
+                ";
         }
 
-        // First API call
-        $response = $this->groq->chatWithTools($messages, $tools, [
-            'temperature' => 0.3,
-            'max_token'   => 500,
-        ]);
+        $totalTokens = 0;
+        $toolsUsed = [];
+        $maxIterations = 3; // Low limit - if prompt is good, will rarely need more than 2
 
-        $totalTokens = $response['tokens'];
+        $iteration = 0;
 
-        // Handle tool calls if any
-        if (!empty($response['tool_calls'])) {
-            $messages[] = [
-                'role'       => 'assistant',
-                'content'    => $response['content'],
-                'tool_calls' => $response['tool_calls'],
-            ];
+        /*
+        * Why a loop?
+        *
+        * The AI sometimes needs multiple rounds:
+        *   Round 1 → AI decides which tool(s) to call
+        *   Round 2 → AI receives tool results, gives final answer
+        *   Round 3 → Rare: AI calls another tool before answering
+        *
+        * The explicit two-call pattern only handles rounds 1 and 2.
+        * This loop handles all cases, with maxIterations as a safety limit.
+        */
+        while ($iteration < $maxIterations) {
+            $iteration++;
 
-            foreach ($response['tool_calls'] as $toolCall) {
-                $functionName = $toolCall['function']['name'];
-                $arguments = json_decode($toolCall['function']['arguments'], true) ?: [];
+            \Log::info("Tool loop - round {$iteration} of max {$maxIterations}");
 
-                try {
-                    $toolResult = $this->toolService->executeTool($functionName, $arguments);
+            $response = $this->groq->chatWithTools($messages, $tools, [
+                'temperature' => 0.3,
+                'max_tokens'  => 500,
+            ]);
+
+            $totalTokens += $response['tokens'];
+
+            // ── EXIT CONDITION ──────────────────────────────────────────
+            // AI returned a text answer with no further tool requests.
+            // This is the normal exit path on round 2 (or round 1 if
+            // no tools were needed after all).
+            // Clean text response
+            if (!empty($response['content']) && empty($response['tool_calls'])) {
+                $this->addMessage($conversation, 'assistant', $response['content']);
+
+                return [
+                    'response'   => $response['content'],
+                    'tokens'     => $totalTokens,
+                    'tools_used' => $toolsUsed,
+                    'rounds'     => $iteration, // Track for monitoring
+                ];
+            }
+
+            // ── TOOL EXECUTION ───────────────────────────────────────────
+            // AI requested tool(s). Execute each one, add results to
+            // $messages, then loop back for the next round.
+            // Tool call requested
+            if (!empty($response['tool_calls'])) {
+                $messages[] = [
+                    'role'       => 'assistant',
+                    'content'    => $response['content'],
+                    'tool_calls' => $response['tool_calls'],
+                ];
+
+                foreach ($response['tool_calls'] as $toolCall) {
+                    $functionName = $toolCall['function']['name'];
+                    $arguments = json_decode($toolCall['function']['arguments'], true) ?: [];
+                    $toolsUsed[] = $functionName;
+                    
+                    try {
+                        $toolResult = $this->toolService->executeTool($functionName, $arguments);
+                    } catch (\Exception $e) {
+                        $toolResult = ['error' => e->getMessage()];
+                    }
 
                     $messages[] = [
                         'role'         => 'tool',
@@ -173,49 +237,23 @@ class ConversationService
                         'name'         => $functionName,
                         'content'      => json_encode($toolResult),
                     ];
-                } catch (\Exception $e) {
-                    \Log::error('Tool failed in conversation:', [
-                        'function' => $functionName,
-                        'error'    => $e->getMessage(),
-                    ]);
-
-                    $messages[] = [
-                        'role'         => 'tool',
-                        'tool_call_id' => $toolCall['id'],
-                        'name'         => $functionName,
-                        'content'      => json_encode(['error' => $e->getMessage()]),
-                    ];
                 }
+
+                continue;
             }
-        
-            // Second API call - generate final response
-            $finalResponse = $this->groq->chatWithTools($messages, $tools, [
-                'temperature' => 0.3,
-                'max_tokens'  => 500,
-            ]);
 
-            $totalTokens += $finalResponse['tokens'];
+            break;
+        } 
 
-dd($finalResponse['content']);
+        $fallback = 'I encountered an issue processing your request. Please try again.';
+        $this->addMessage($conversation, 'assistant', $fallback);
 
-            //Save final response
-            // $this->addMessage($conversation, 'assistant', $finalResponse['content']);
-
-            return [
-                'response'   => $finalResponse['content'],
-                'tokens'     => $totalTokens,
-                'tools_used' => array_map(fn($t) => $t['function']['name'], $response['tool_calls']),
-            ];
-        }
-
-        // No tools needed - save direct response
-        // $this->addMessage($conversation, 'assistant', $response['content']);
-dd($response['content']);
         return [
-            'response'   => $response['content'],
+            'response'   => $fallback,
             'tokens'     => $totalTokens,
-            'tools_used' => [],
+            'tools_used' => $toolsUsed,
         ];
+
     }
 
     /**

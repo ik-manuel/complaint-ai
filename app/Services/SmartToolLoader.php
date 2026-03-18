@@ -77,44 +77,60 @@ class SmartToolLoader
     {
         $allTools = $this->toolService->getAvailableTools();
         $tools = [];
+        $message = strtolower($userMessage);
 
-        // === LAYER 1: Context-based tools (load based on what we know) ===
+        // === LAYER 1: Context-based tools ===
+        // Only load if the message is actually asking about complaint/status/history
+        // NOT for every message just because context exists
 
-        // If we're in a complaint conversation, always make ticket lookup available
-        if (!empty($context['ticket_number'])) {
+        $isAskingAboutComplaint = preg_match(
+            '/\b(status|complaint|ticket|update|progress|resolved|pending|urgency|category)\b/i',
+            $message
+        );
+
+        $isAskingAboutHistory = preg_match(
+            '/\b(history|other complaints|how many complaints|all my complaints|previous)\b/i',
+            $message
+        );
+
+        if ($isAskingAboutComplaint && !empty($context['ticket_number'])) {
             $tools[] = $this->findTool($allTools, 'get_complaint_by_ticket');
         }
 
-        // === LAYER 2: Message-based tools (load based on what user asked) ===
+        if ($isAskingAboutHistory && !empty($context['customer_email'])) {
+            $tools[] = $this->findTool($allTools, 'get_customer_complaints');
+        }
 
-        $message = strtolower($userMessage);
+        // === LAYER 2: Message-based tools ===
 
-        // Math in message
+
+        // Math
         if (preg_match('/\b(\d+.*[\+\-\*\/]|calculate|percent|times|multiply|divide)\b/i', $message)) {
             $tools[] = $this->findTool($allTools, 'calculate');
         }
 
-        // Time in message
+        // Time
         if (preg_match('/\b(time|date|when|today|now|current)\b/i', $message)) {
             $tools[] = $this->findTool($allTools, 'get_current_time');
         }
 
-        // Search/filter complaints in message
-        if (preg_match('/\b(find|search|all complaints|other complaints|similar)\b/i', $message)) {
+        // Search complaints
+        if (preg_match('/\b(find|search|all complaints|similar|other complaints)\b/i', $message)) {
             $tools[] = $this->findTool($allTools, 'search_complaints');
+        }
+
+        // Statistics
+        if (preg_match('/\b(how many|total|statistics|stats).*\b(complaints)\b/i', $message)) {
             $tools[] = $this->findTool($allTools, 'get_complaint_statistics');
         }
 
         // Remove nulls and duplicates
         $tools = array_values(array_unique(array_filter($tools), SORT_REGULAR));
 
-        \Log::info('SmartToolLoader - Conversation tools selected:', [
-            'message'                 => $userMessage,
-            'context_provided'        => array_keys($context),
-            'tools_selected'          => array_map(fn($t) => $t['function']['name'], $tools),
-            'total_tools_available'   => count($allTools),
-            'tools_loaded'            => count($tools),
-            'estimated_token_savings' => (count($allTools) - count($tools)) * 50 . ' tokens',
+        \Log::info('SmartToolLoader - Conversation tools:', [
+            'message' => $userMessage,
+            'tools_selected' => array_map(fn($t) => $t['function']['name'], $tools),
+            'token_savings' => (count($allTools) - count($tools)) * 50 . ' tokens saved',
         ]);
 
         return $tools;

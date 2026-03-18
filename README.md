@@ -1,7 +1,7 @@
 # ComplaintAI - AI-Powered Customer Complaint Management System
 
-![Laravel](https://img.shields.io/badge/Laravel-10.x-red)
-![PHP](https://img.shields.io/badge/PHP-8.1%2B-blue)
+![Laravel](https://img.shields.io/badge/Laravel-12.x-red)
+![PHP](https://img.shields.io/badge/PHP-8.2%2B-blue)
 ![AI](https://img.shields.io/badge/AI-Groq%20%7C%20Llama%203.1-green)
 ![License](https://img.shields.io/badge/license-MIT-blue)
 
@@ -37,6 +37,21 @@ This project showcases fundamental AI engineering concepts:
 - **Structured outputs**: Parsing AI responses into actionable data
 - **Context management**: Providing relevant customer information
 - **Tone adaptation**: Matching response style to urgency
+
+### **Week 3 Concepts: Conversation Memory**
+- Persistent multi-turn conversations with MySQL storage
+- Context window management (dynamic message windowing)
+- Auto-summarization at 15+ messages to control token usage
+- Smart re-summarization to avoid redundant summaries
+- Token optimization: 17% reduction through windowing strategy
+
+### **Week 4 Concepts: Function Calling / Tool Use**
+- **Tool definitions**: Describing functions as JSON schemas for the AI
+- **Two-step tool flow**: AI requests tool → we execute → AI uses result
+- **Multi-tool calling**: AI calls multiple tools in a single round
+- **Smart tool loading**: Context-aware tool selection to minimize token usage
+- **Loop-based execution**: Handles multi-round tool chains safely
+- **Token cost awareness**: Loading only relevant tools saves ~200 tokens/request
 
 ## 🛠️ Tech Stack
 
@@ -200,6 +215,22 @@ ai_responses
 ├─ tokens_used
 ├─ approved (boolean)
 └─ created_at
+
+conversations
+├─ id
+├─ complaint_id (FK)
+├─ summary (text, nullable)
+├─ message_count
+└─ created_at
+
+messages
+├─ id
+├─ conversation_id (FK)
+├─ role (system/user/assistant)
+├─ content
+├─ tokens
+└─ created_at
+
 ```
 
 ## 🔧 Configuration
@@ -227,6 +258,17 @@ AI_MAX_TOKENS=500
 - ✅ Plenty for learning and demos
 - ✅ Production: Minimal cost (~$0.01 per complaint on paid tiers)
 
+**Week 4: Function Calling**
+- Simple conversation turn (no tools): ~40-80 tokens
+- Single tool call (2 API rounds): ~1,900-2,100 tokens
+- Multi-tool call (2 API rounds): ~2,100-2,300 tokens
+- Token savings from SmartToolLoader: ~200-250 tokens per request
+
+**Smart Tool Loading Strategy:**
+- Layer 1 (context-based): Load complaint/customer tools only when message asks for data
+- Layer 2 (message-based): Load utility tools based on pattern matching
+- Result: 0 tools loaded for general conversation (maximum savings)
+
 ## 🧪 Testing
 ```bash
 # Run tests
@@ -239,7 +281,7 @@ php artisan test --filter=AIIntegrationTest
 ## 🚧 Roadmap (Future Enhancements)
 
 - [x] **Week 3**: Add conversation memory for follow-ups
-- [ ] **Week 4**: Implement function calling for database queries
+- [x] **Week 4**: Implement function calling for database queries
 - [ ] **Week 8**: RAG system for policy document retrieval
 - [ ] Multi-language support
 - [ ] Email integration (auto-send responses)
@@ -303,6 +345,66 @@ AI: *calls database* → "Order #12345 shipped yesterday, arrives tomorrow" ✅
 📈 Token optimization achieved: [17%]
 🔥 Excitement for Week 4: [10]
 ```
+
+---
+
+## 🎊 Week 4 Final Assessment
+
+**Technical Mastery:**
+
+| Concept | Level | Evidence |
+|---------|-------|----------|
+| Function Calling | ⭐⭐⭐⭐⭐ | 7 tools built and working |
+| Multi-Tool Calling | ⭐⭐⭐⭐⭐ | 3 tools called in parallel |
+| Token Optimization | ⭐⭐⭐⭐⭐ | SmartToolLoader saves ~200 tokens/request |
+| Database Tool Integration | ⭐⭐⭐⭐⭐ | Live DB queries via AI |
+| Production Thinking | ⭐⭐⭐⭐⭐ | Loop pattern + safety limits |
+| Debugging Skills | ⭐⭐⭐⭐⭐ | Caught null args + multi-round bugs independently |
+
+**Overall Grade: A++** 🏆🏆🏆
+
+---
+
+## 📚 Week 4 → Week 5 Bridge
+
+**What you've mastered:**
+- ✅ Week 1: LLM API basics
+- ✅ Week 2: Prompt engineering
+- ✅ Week 3: Conversation memory + token optimization
+- ✅ Week 4: Function calling + database tools + smart tool loading
+
+**Week 5 Preview: Embeddings + Semantic Search**
+```
+Current capability (Week 4):
+User: "Find complaints about shipping"
+AI: *queries DB with exact filter* → Returns only exact "shipping" category ❌
+
+Week 5 capability:
+User: "My package never arrived"
+AI: *semantic search* → Finds "missing delivery", "order not received",
+    "shipment lost" even without keyword match ✅
+```
+
+**Next:**
+- What embeddings are and how they represent meaning
+- Cosine similarity — measuring semantic distance
+- Building semantic search for ComplaintAI
+- Finding similar complaints without keyword matching
+- Foundation for RAG systems (Month 2)
+
+---
+
+## 💬 Week 4 Completion:
+```
+🎉 Completion status: [EXCEEDED EXPECTATIONS]
+📊 Tools built: [7 - calculator, time, string, ticket lookup, customer history, search, stats]
+🏆 Advanced features added: [SmartToolLoader + loop-based tool execution]
+💡 Bugs found and fixed: [2 - null arguments + multi-round tool chain]
+🎯 Production readiness: [100%]
+📈 Token optimization: [~200 tokens saved per tool request]
+🔥 Excitement for Week 5: [10]
+```
+
 
 ## 🤝 Contributing
 
