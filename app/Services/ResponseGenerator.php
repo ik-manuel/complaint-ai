@@ -16,7 +16,7 @@ class ResponseGenerator
      */
     public function generate(Complaint $complaint): array
     {
-        $systemMessage = $this->getSystemMessageForUrgency($complaint->urgency);
+        $systemMessage = $this->getSystemMessageForUrgency($complaint->urgency->value);
 
         $prompt = "Customer Complaint:
             Subject: {$complaint->subject}

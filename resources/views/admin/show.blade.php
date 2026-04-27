@@ -18,12 +18,12 @@
                 <p class="text-gray-600 font-mono">{{ $complaint->ticket_number }}</p>
             </div>
             <span class="px-3 py-1 text-sm font-semibold rounded-full capitalize
-                @if($complaint->urgency === 'high') bg-red-100 text-red-800
-                @elseif($complaint->urgency === 'medium') bg-yellow-100 text-yellow-800
+                @if($complaint->urgency === \App\Enums\ComplaintUrgency::High) bg-red-100 text-red-800
+                @elseif($complaint->urgency === \App\Enums\ComplaintUrgency::Medium) bg-yellow-100 text-yellow-800
                 @else bg-green-100 text-green-800
                 @endif
             ">
-                {{ $complaint->urgency }} Urgency
+                {{ ucfirst($complaint->urgency->value) }} Urgency
             </span>
         </div>
 
@@ -92,6 +92,54 @@
         </div>
     </div>
     @endif
+
+
+    {{-- Similar Complaints Panel --}}
+    @if($similarComplaints->isNotEmpty())
+    <div class="mb-6 bg-white rounded-lg shadow p-6">
+        <h3 class="text-lg font-semibold text-gray-800 mb-4">
+            🔍 Similar Complaints
+            <span class="text-sm font-normal text-gray-500 ml-2">
+                Found by semantic similarity
+            </span>
+        </h3>
+
+        <div class="space-y-3">
+            @foreach($similarComplaints as $similar)
+            <div class="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200">
+                <div class="flex-1">
+                    <div class="flex items-center gap-2 mb-1">
+                        <span class="text-xs font-mono text-gray-500">
+                            {{ $similar->ticket_number }}
+                        </span>
+                        <span class="text-xs px-2 py-0.5 rounded-full
+                            {{ $similar->urgency === 'high' ? 'bg-red-100 text-red-700' :
+                            ($similar->urgency === 'medium' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-green-100 text-green-700') }}">
+                            {{ $similar->urgency }}
+                        </span>
+                        <span class="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
+                            {{ $similar->status }}
+                        </span>
+                    </div>
+                    <p class="text-sm text-gray-800">{{ $similar->subject }}</p>
+                    <p class="text-xs text-gray-500 mt-1">{{ $similar->customer_name }}</p>
+                </div>
+                <div class="ml-4 text-right">
+                    <div class="text-sm font-semibold text-purple-600">
+                        {{ number_format($similar->similarity_score * 100, 1) }}%
+                    </div>
+                    <div class="text-xs text-gray-400">match</div>
+                </div>
+            </div>
+            @endforeach
+        </div>
+
+        <p class="text-xs text-gray-400 mt-3">
+            Matches found by meaning, not keywords.
+        </p>
+    </div>
+    @endif
     
 
     <!-- Conversation History -->
@@ -122,13 +170,13 @@
             @foreach($complaint->conversation->messages as $message)
                 @if($message->role !== 'system')
                     <div class="border-l-4 pl-4 py-2
-                        {{ $message->role === 'user' ? 'border-blue-500 bg-blue-50' : 'border-gray-500 bg-gray-50' }}
+                        {{ $message->role === \App\Enums\MessageRole::User ? 'border-blue-500 bg-blue-50' : 'border-gray-500 bg-gray-50' }}
                     ">
                         <div class="flex justify-between items-start mb-1">
                             <span class="text-xs font-semibold
-                                {{ $message->role === 'user' ? 'text-blue-800' : 'text-gray-700' }}
+                                {{ $message->role === \App\Enums\MessageRole::User ? 'text-blue-800' : 'text-gray-700' }}
                             ">
-                                {{ $message->role === 'user' ? '👤 Customer' : '🤖 AI Assistant' }}
+                                {{ $message->role === \App\Enums\MessageRole::User ? '👤 Customer' : '🤖 AI Assistant' }}
                             </span>
                             <span class="text-xs text-gray-500">
                                 {{ $message->created_at->format('M d, H:i') }} | {{ $message->tokens }} tokens

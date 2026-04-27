@@ -22,8 +22,6 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::post('/complaints/{complaint}/resolve', [AdminController::class, 'resolve'])->name('resolve');
 });
 
-
-
 // TEST
 Route::get('/test-dynamic-window', function() {
     $conversationService = app(\App\Services\ConversationService::class);

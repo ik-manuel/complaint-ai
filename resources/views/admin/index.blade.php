@@ -60,12 +60,12 @@
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap">
                         <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full
-                            @if($complaint->urgency === 'high') bg-red-100 text-red-800
-                            @elseif($complaint->urgency === 'medium') bg-yellow-100 text-yellow-800
+                            @if($complaint->urgency === \App\Enums\ComplaintUrgency::High) bg-red-100 text-red-800
+                            @elseif($complaint->urgency === \App\Enums\ComplaintUrgency::Medium) bg-yellow-100 text-yellow-800
                             @else bg-green-100 text-green-800
                             @endif
                         ">
-                            {{ ucfirst($complaint->urgency) }}
+                            {{ ucfirst($complaint->urgency->value) }}
                         </span>
                     </td>
                     <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500 capitalize">

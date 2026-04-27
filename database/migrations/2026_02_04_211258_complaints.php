@@ -17,9 +17,9 @@ return new class extends Migration
             $table->string('ticket_number')->unique();
             $table->string('subject');
             $table->text('message');
-            $table->enum('urgency', ['low', 'medium', 'high'])->nullable();
+            $table->string('urgency')->nullable();;
             $table->string('category')->nullable();
-            $table->enum('status', ['new', 'responded', 'resolved'])->default('new');
+            $table->string('status')->default('new');
             $table->timestamps();
         });
     }

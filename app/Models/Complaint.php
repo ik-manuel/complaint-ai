@@ -5,6 +5,8 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasOne;
+use App\Enums\ComplaintStatus;
+use App\Enums\ComplaintUrgency;
 
 class Complaint extends Model
 {
@@ -16,6 +18,13 @@ class Complaint extends Model
         'urgency',
         'category',
         'status',
+        'embedding',
+    ];
+
+    protected $casts = [
+        'status'    => ComplaintStatus::class,
+        'urgency'   => ComplaintUrgency::class,
+        'embedding' => 'array',
     ];
 
     protected static function boot(): void

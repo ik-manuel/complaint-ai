@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Models\Conversation;
 use App\Models\Message;
 use App\Models\Complaint;
+use App\Enums\MessageRole;
+use App\Enums\ComplaintUrgency;
 use Exception;
 use Illuminate\Support\Facades\Log;
 
@@ -22,7 +24,7 @@ class ConversationService
     public function createConversation(Complaint $complaint): Conversation
     {
         // Role-based system prompt
-        $systemPrompt = $this->getSystemPromptForUrgency($complaint->urgency);
+        $systemPrompt = $this->getSystemPromptForUrgency($complaint->urgency->value);
 
         return $conversation = Conversation::create([
             'complaint_id' => $complaint->id,
@@ -35,13 +37,13 @@ class ConversationService
      */
     public function addMessage(
         Conversation $conversation, 
-        string $role, 
+        string|MessageRole $role, 
         string $content
     ): Message {
         $tokens = Message::estimateTokens($content);
 
         $message = $conversation->messages()->create([
-            'role'    => $role,
+            'role'    => $role instanceof MessageRole ? $role->value : $role,
             'content' => $content,
             'tokens'  => $tokens,
             'sent_at' => now(),
@@ -59,7 +61,7 @@ class ConversationService
     public function getAiResponse(Conversation $conversation, string $userMessage): array
     {
         // Add user message to conversation
-        $this->addMessage($conversation, 'user', $userMessage);
+        $this->addMessage($conversation, MessageRole::User, $userMessage);
 
         // DEBUG: Log message count
         $messageCount = $conversation->messages()->count();
@@ -92,7 +94,7 @@ class ConversationService
         ]);
 
         // Save AI response to conversation
-        $this->addMessage($conversation, 'assistant', $result['content']);
+        $this->addMessage($conversation, MessageRole::Assistant, $result['content']);
 
         return $result;
     }
@@ -103,7 +105,7 @@ class ConversationService
     public function getAiResponseWithTools(Conversation $conversation, string $userMessage): array
     {
         // Add user message
-        $this->addMessage($conversation, 'user', $userMessage);
+        $this->addMessage($conversation, MessageRole::User, $userMessage);
 
         // Summarize if needed
         if ($this->shouldSummarize($conversation)) {
@@ -132,7 +134,7 @@ class ConversationService
                 'history' => array_slice($messages, 1), // conversation history
             ]);
 
-            $this->addMessage($conversation, 'assistant', $response['content']);
+            $this->addMessage($conversation, MessageRole::Assistant, $response['content']);
 
             return [
                 'response'   => $response['content'],
@@ -199,7 +201,7 @@ class ConversationService
             // no tools were needed after all).
             // Clean text response
             if (!empty($response['content']) && empty($response['tool_calls'])) {
-                $this->addMessage($conversation, 'assistant', $response['content']);
+                $this->addMessage($conversation, MessageRole::Assistant, $response['content']);
 
                 return [
                     'response'   => $response['content'],
@@ -246,7 +248,7 @@ class ConversationService
         } 
 
         $fallback = 'I encountered an issue processing your request. Please try again.';
-        $this->addMessage($conversation, 'assistant', $fallback);
+        $this->addMessage($conversation, MessageRole::Assistant, $fallback);
 
         return [
             'response'   => $fallback,
@@ -310,11 +312,11 @@ class ConversationService
     private function getSystemPromptForUrgency(string $urgency): string
     {
         return match($urgency) {
-            'high' => "You are a senior customer service manager. Be direct, empathetic, and action-oriented. You have access to the full conversation history and can reference previous messages.",
+            ComplaintUrgency::High => "You are a senior customer service manager. Be direct, empathetic, and action-oriented. You have access to the full conversation history and can reference previous messages.",
             
-            'medium' => "You are a professional customer support agent. Be helpful, clear, and solution-focused. You remember previous interactions and can provide context-aware responses.",
+            ComplaintUrgency::Medium => "You are a professional customer support agent. Be helpful, clear, and solution-focused. You remember previous interactions and can provide context-aware responses.",
             
-            'low' => "You are a friendly customer support representative. Be warm, patient, and informative. You maintain conversation context and can answer follow-up questions.",
+            ComplaintUrgency::Low => "You are a friendly customer support representative. Be warm, patient, and informative. You maintain conversation context and can answer follow-up questions.",
             
             default => "You are a professional customer support agent with access to conversation history."
         };
@@ -386,7 +388,7 @@ class ConversationService
 
         $conversationText = '';
         foreach ($messagesToSummarize as $message) {
-            $role = $message->role === 'user' ? 'Customer' : 'Support';
+            $role = $message->role === \App\Enums\MessageRole::User ? 'Customer' : 'Support';
             $conversationText .= "{$role}: {$message->content}\n\n";
         }
 
@@ -465,7 +467,7 @@ class ConversationService
 
         $newConversationText = '';
         foreach ($newMessages as $message) {
-            $role = $message->role === 'user' ? 'Customer' : 'Support';
+            $role = $message->role === \App\Enums\MessageRole::User ? 'Customer' : 'Support';
             $newConversationText .= "{$role}: {$message->content}\n\n";
         }
 

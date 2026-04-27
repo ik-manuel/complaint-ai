@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('messages', function (Blueprint $table) {
             $table->id();
             $table->foreignId('conversation_id')->constrained()->onDelete('cascade');
-            $table->enum('role', ['system', 'user', 'assistant']);
+            $table->string('role');
             $table->text('content');
             $table->integer('tokens')->default(0);
             $table->timestamp('sent_at')->nullable();

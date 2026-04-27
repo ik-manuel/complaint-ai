@@ -3,11 +3,13 @@
 namespace App\Http\Controllers;
 
 use App\Models\Complaint;
-use App\Models\AiResponse;
 use Illuminate\Http\Request;
+use App\Services\EmbeddingService;
 
 class AdminController extends Controller
 {
+    public function __construct(private EmbeddingService $embeddingService) {}
+
     /**
      * Show admin dashboard with all complaints
      */
@@ -33,9 +35,24 @@ class AdminController extends Controller
      */
     public function show(Complaint $complaint)
     {
-        $complaint->load(['customer', 'aiResponse']);
+        $complaint->load(['customer', 'aiResponse', 'conversation.messages']);
 
-        return view('admin.show', compact('complaint'));
+        $similarComplaints =  collect();
+
+        try {
+            $similarComplaints = $this->embeddingService->findSimilarComplaints($complaint, 3);
+            \Log::info('AdminController: similar complaints loaded', [
+                'count' => $similarComplaints->count(),
+            ]);
+
+        } catch (\Exception $e) {
+            \Log::error('AdminController: similar complaints failed', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+            ]);
+        }
+
+        return view('admin.show', compact('complaint', 'similarComplaints'));
     }
 
     /**

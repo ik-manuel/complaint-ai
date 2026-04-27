@@ -13,12 +13,12 @@
                 <p class="text-sm text-gray-500 mt-2">Status: <span class="font-semibold capitalize">{{ $complaint->status }}</span></p>
             </div>
             <span class="px-3 py-1 text-sm font-semibold rounded-full capitalize
-                @if($complaint->urgency === 'high') bg-red-100 text-red-800
-                @elseif($complaint->urgency === 'medium') bg-yellow-100 text-yellow-800
+                @if($complaint->urgency === \App\Enums\ComplaintUrgency::High) bg-red-100 text-red-800
+                @elseif($complaint->urgency === \App\Enums\ComplaintUrgency::Medium) bg-yellow-100 text-yellow-800
                 @else bg-green-100 text-green-800
                 @endif
             ">
-                {{ $complaint->urgency }} Urgency
+                {{ ucfirst($complaint->urgency->value) }} Urgency
             </span>
         </div>
     </div>
@@ -31,10 +31,10 @@
             @if($complaint->conversation && $complaint->conversation->messages->count() > 0)
                 @foreach($complaint->conversation->messages as $message)
                     @if($message->role !== 'system')
-                        <div class="flex {{ $message->role === 'user' ? 'justify-end' : 'justify-start' }}">
-                            <div class="max-w-3/4 {{ $message->role === 'user' ? 'bg-blue-100' : 'bg-gray-100' }} rounded-lg p-4">
+                        <div class="flex {{ $message->role === \App\Enums\MessageRole::User ? 'justify-end' : 'justify-start' }}">
+                            <div class="max-w-3/4 {{ $message->role === \App\Enums\MessageRole::User ? 'bg-blue-100' : 'bg-gray-100' }} rounded-lg p-4">
                                 <div class="flex items-center gap-2 mb-2">
-                                    @if($message->role === 'user')
+                                    @if($message->role === \App\Enums\MessageRole::User)
                                         <span class="text-xs font-semibold text-blue-800">You</span>
                                     @else
                                         <span class="text-xs font-semibold text-gray-700">🤖 Support AI</span>

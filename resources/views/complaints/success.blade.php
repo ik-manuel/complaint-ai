@@ -23,12 +23,12 @@
             <div class="flex justify-between">
                 <span class="text-gray-700">Urgency Level:</span>
                 <span class="font-semibold capitalize
-                    @if($complaint->urgency === 'high') text-red-600
-                    @elseif($complaint->urgency === 'medium') text-yellow-600
+                    @if($complaint->urgency === \App\Enums\ComplaintUrgency::High) text-red-600
+                    @elseif($complaint->urgency === \App\Enums\ComplaintUrgency::Medium) text-yellow-600
                     @else text-green-600
                     @endif
                 ">
-                    {{ $complaint->urgency }}
+                    {{ ucfirst($complaint->urgency->value) }}
                 </span>
             </div>
             <div class="flex justify-between">

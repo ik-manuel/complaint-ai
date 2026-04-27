@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use App\Enums\MessageRole;
 
 class Message extends Model
 {
@@ -17,6 +18,7 @@ class Message extends Model
 
     protected $casts = [
         'sent_at' => 'datetime',
+        'role'    => MessageRole::class,
     ];
 
     public function conversation(): BelongsTo

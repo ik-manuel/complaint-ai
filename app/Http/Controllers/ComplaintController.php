@@ -8,15 +8,18 @@ use App\Models\AiResponse;
 use App\Services\ComplaintClassifier;
 use App\Services\ResponseGenerator;
 use App\Services\ConversationService;
+use App\Services\EmbeddingService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 
 class ComplaintController extends Controller
 {
     public function __construct(
         private ComplaintClassifier $classifier,
         private ResponseGenerator $responseGenerator,
-        private ConversationService $conversationService
+        private ConversationService $conversationService,
+        private EmbeddingService $embeddingService
     ) {  }
 
     /**
@@ -40,7 +43,7 @@ class ComplaintController extends Controller
     }
 
     /**
-     * NEW: Handle customer follow-up message
+     * Handle customer follow-up message
      */
     public function followUp(Request $request, $ticketNumber)
     {
@@ -85,8 +88,8 @@ class ComplaintController extends Controller
     public function store(Request $request)
     {
         $validated = $request->validate([
-            'name' => 'required|string|max:255',
-            'email' => 'required|email|max:255',
+            'name'    => 'required|string|max:255',
+            'email'   => 'required|email|max:255',
             'subject' => 'required|string|max:255',
             'message' => 'required|string|min:10',
         ]);
@@ -97,14 +100,30 @@ class ComplaintController extends Controller
             // Find or create customer
             $customer = Customer::firstOrCreate(
                 ['email' => $validated['email']],
-                ['name' => $validated['name']]
+                ['name'  => $validated['name']]
             );
 
             // Create complaint
             $complaint = $customer->complaints()->create([
                 'subject' => $validated['subject'],
                 'message' => $validated['message'],
-                'status' => 'new',
+                'status'  => 'new',
+            ]);
+
+            // Generate and store embedding
+            // Build rich text from subject + message
+            $text = $this->embeddingService->buildComplaintText($complaint);
+            $embedding = $this->embeddingService->embed($text);
+            // Store as PostgreSQL vector string
+            \DB::table('complaints')
+                ->where('id', $complaint->id)
+                ->update([
+                    'embedding' => $this->embeddingService->formatForStorage($embedding)
+                ]);
+
+            Log::info('Complaint embedding stored', [
+                'complaint_id'  => $complaint->id,
+                'ticket_number' => $complaint->ticket_number,
             ]);
 
             // AI Classification
@@ -114,7 +133,7 @@ class ComplaintController extends Controller
             );
 
             $complaint->update([
-                'urgency' => $classification['urgency'],
+                'urgency'  => $classification['urgency'],
                 'category' => $classification['category'],
             ]);
 
