@@ -13,6 +13,10 @@
                 <h1 class="text-2xl font-bold text-blue-600">ComplaintAI</h1>
                 <div class="space-x-4">
                     <a href="{{ route('complaint.create') }}" class="text-gray-600 hover:text-blue-600">Submit Complaint</a>
+                    <a href="{{ route('admin.search') }}"
+                       class="text-gray-600 hover:text-blue-600">
+                        🔍 Search
+                    </a>
                     <a href="{{ route('admin.index') }}" class="text-gray-600 hover:text-blue-600">Admin Dashboard</a>
                 </div>
             </div>
@@ -42,7 +46,7 @@
 
     <footer class="bg-white shadow-lg mt-12">
         <div class="max-w-7xl mx-auto px-4 py-6 text-center text-gray-600">
-            <p>ComplaintAI - AI-Powered Customer Service | Week 1 & 2 Concepts Demo</p>
+            <p>ComplaintAI - AI-Powered Customer Service</p>
         </div>
     </footer>
 </body>

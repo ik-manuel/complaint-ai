@@ -4,6 +4,14 @@
 
 @section('content')
 <div class="mb-8">
+    <!-- <div class="flex justify-end">
+        <a href="{{ route('admin.search') }}"
+        class="inline-flex items-center gap-2 px-4 py-2 bg-blue-600
+                text-white text-sm font-medium rounded-lg hover:bg-blue-700
+                transition-colors">
+            🔍 Semantic Search
+        </a>
+    </div> -->
     <h2 class="text-3xl font-bold text-gray-800 mb-6">Admin Dashboard</h2>
     
     <!-- Stats Cards -->

@@ -56,6 +56,44 @@ class AdminController extends Controller
     }
 
     /**
+     * Semantics search across complaints using natural laView//|RedirectResponsenguage query.
+     * Converts query text to embedding then finds nearest vectors in DB.
+     */
+    public function search(Request $request)
+    {
+        $validated = $request->validate([
+            'q' => 'nullable|string|max:255',
+        ]);
+
+        $query = trim($validated['q'] ?? '');
+        $results = collect();
+        $error = null;
+
+        if ($query !== '') {
+            try {
+                $results = $this->embeddingService->searchByText($query, 10);
+
+                \Log::info('AdminController: semantic search performed', [
+                    'query'         => $query,
+                    'results_count' => $results->count(),
+                ]);
+
+            } catch (\Exception $e) {
+                $error = 'Search failed. Please ensure Ollama is running.'; // Construct better error message for production
+
+                \Log::error('AdminController: semantic search failed', [
+                    'query' => $query,
+                    'error' => $e->getMessage(),
+                ]);
+            }
+
+        }
+
+        return view('admin.search', compact('query', 'results', 'error'));
+
+    }
+
+    /**
      * Approve AI response and mark as ready to send
      */
     public function approve(Complaint $complaint)

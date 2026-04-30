@@ -118,7 +118,11 @@
                             'bg-green-100 text-green-700') }}">
                             {{ $similar->urgency }}
                         </span>
-                        <span class="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full">
+                        <span class="text-xs px-2 py-0.5 rounded-full
+                            {{ $similar->status === 'new' ? 'bg-blue-100 text-blue-700' :
+                            ($similar->status === 'resolved' ? 'bg-green-100 text-green-700' :
+                            ($similar->status === 'responded' ? 'bg-yellow-100 text-yellow-700' :
+                            'bg-gray-100 text-gray-600')) }}">
                             {{ $similar->status }}
                         </span>
                     </div>

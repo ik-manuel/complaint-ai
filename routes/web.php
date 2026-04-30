@@ -16,6 +16,7 @@ Route::post('/complaints/{ticketNumber}/follow-up', [ComplaintController::class,
 // Admin Routes - Dashboard
 Route::prefix('admin')->name('admin.')->group(function () {
     Route::get('/', [AdminController::class, 'index'])->name('index');
+    Route::get('/complaints/search', [AdminController::class, 'search'])->name('search');
     Route::get('/complaints/{complaint}', [AdminController::class, 'show'])->name('show');
     Route::post('/complaints/{complaint}/approve', [AdminController::class, 'approve'])->name('approve');
     Route::post('/complaints/{complaint}/update-response', [AdminController::class, 'updateResponse'])->name('update-response');

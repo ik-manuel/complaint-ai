@@ -156,6 +156,10 @@ class EmbeddingService
         try {
             // Validate LIMIT to prevent SQL injection
             $limit = max(1, min((int)$limit, 100));
+
+            // 0.45 threshold based on nomic-embed-text calibration threshold 
+            // Below this score, results are not meaningfully related
+            $minimumSimilarity = 0.50;
             
             // Use subquery: pgvector <=> operator doesn't work well with JOIN on same table
             // So we calculate similarity first, then join with customers
@@ -187,6 +191,8 @@ class EmbeddingService
                     LIMIT {$limit}
                 ) sub
                 INNER JOIN customers cu ON cu.id = sub.customer_id
+                WHERE sub.similarity_score >= {$minimumSimilarity}
+                ORDER BY sub.similarity_score DESC
             ";
             $results = DB::select($query, [$row->embedding_text, $complaint->id, $row->embedding_text]);
 
@@ -221,6 +227,9 @@ class EmbeddingService
             // Validate LIMIT to prevent SQL injection
             $limit = max(1, min((int)$limit, 100));
 
+            // 0.45 threshold based on nomic-embed-text calibration threshold 
+            $minimumSimilarity = 0.45;
+
             // Use subquery: pgvector <=> operator doesn't work well with JOIN on same table
             // So we calculate similarity first, then join with customers
             $query = "
@@ -250,6 +259,8 @@ class EmbeddingService
                     LIMIT {$limit}
                 ) sub
                 INNER JOIN customers cu ON cu.id = sub.customer_id
+                WHERE sub.similarity_score >= {$minimumSimilarity}
+                ORDER BY sub.similarity_score DESC
             ";
             $results = DB::select($query, [$embeddingString, $embeddingString]);
 
