@@ -3,6 +3,7 @@
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\ComplaintController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\DocumentController;
 
 // Public Routes - Complaint Submission
 Route::get('/', [ComplaintController::class, 'create'])->name('complaint.create');
@@ -21,6 +22,15 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::post('/complaints/{complaint}/approve', [AdminController::class, 'approve'])->name('approve');
     Route::post('/complaints/{complaint}/update-response', [AdminController::class, 'updateResponse'])->name('update-response');
     Route::post('/complaints/{complaint}/resolve', [AdminController::class, 'resolve'])->name('resolve');
+});
+
+// Document ingestion routes (admin only)
+Route::prefix('admin/documents')->name('documents.')->group(function () {
+    Route::get('/',           [DocumentController::class, 'index'])->name('index');
+    Route::get('/upload',     [DocumentController::class, 'create'])->name('create');
+    Route::post('/',          [DocumentController::class, 'store'])->name('store');
+    Route::get('/{document}', [DocumentController::class, 'show'])->name('show');
+    Route::delete('/{document}', [DocumentController::class, 'destroy'])->name('destroy');
 });
 
 // TEST
