@@ -64,13 +64,22 @@ This project showcases fundamental AI engineering concepts:
 - **Backfill commands**: Generating embeddings for existing records in bulk
 - **Semantic search endpoint**: Natural language search across complaint database
 
+### **Week 7 Concepts: Chunking + Document Ingestion**
+- **Paragraph-aware chunking**: Splitting at natural boundaries preserving meaning
+- **Chunk overlap**: Retaining tail of previous chunk to preserve boundary context
+- **Token estimation**: Approximating chunk size without tokenizer (4 chars ≈ 1 token)
+- **Ingestion pipeline**: PDF → extract → chunk → embed → store as atomic operation
+- **Document structure influence**: Bullet-point sections produce smaller chunks than prose
+- **RAG retrieval method**: findRelevantChunks returns semantically closest chunks to query
+
 
 ## 🛠️ Tech Stack
 
 - **Framework**: Laravel 12.x
 - **Language**: PHP 8.2+
-- **Database**: MySQL 8.0
+- **Database**: MySQL 8.0 & PostgreSQL 16.0
 - **AI API**: Groq (Llama 3.3 70B Versatile)
+- **Embedding Model**: Ollama (Nomic-Embed-Text)
 - **Frontend**: Blade Templates + Tailwind CSS
 - **HTTP Client**: Guzzle (via Laravel HTTP)
 
@@ -80,6 +89,7 @@ This project showcases fundamental AI engineering concepts:
 - Composer
 - MySQL 8.0 or higher
 - Groq API Key ([Get one free](https://console.groq.com))
+- Ollama (Local Embedding Model) (https://ollama.com)
 
 ## 🚀 Installation
 
@@ -108,6 +118,9 @@ DB_PASSWORD=your_password
 
 GROQ_API_KEY=your_groq_api_key_here
 GROQ_MODEL=llama-3.3-70b-versatile
+
+OLLAMA_URL=http://localhost:11434
+OLLAMA_EMBEDDING_MODEL=nomic-embed-text
 ```
 
 ### 5. Create database
@@ -171,6 +184,10 @@ Visit: `http://localhost:8000`
 ### Semantic Complaint Search - Search complaints by meaning, not keywords.
 ![Semantic Search](docs/screenshots/semantic-search.jpg)
 
+### Chunking + document ingestion pipeline
+upload, list, show, delete
+![Semantic Search](docs/screenshots/doc-ingestion.jpg)
+![Semantic Search](docs/screenshots/doc-ingestion-chunks.jpg)
 
 ## 🧪 How It Works
 
@@ -248,6 +265,26 @@ messages
 ├─ tokens
 └─ created_at
 
+documents
+├─ id
+├─ title
+├─ filename
+├─ file_size
+├─ total_chunks
+├─ total_pages
+├─ status (pending/processing/completed/failed)
+├─ error_message (nullable)
+└─ created_at
+
+document_chunks
+├─ id
+├─ document_id (FK → documents, cascade delete)
+├─ chunk_index
+├─ content
+├─ token_count
+├─ embedding  vector(768)
+└─ created_at
+
 ```
 
 ## 🔧 Configuration
@@ -256,6 +293,9 @@ messages
 ```env
 GROQ_API_KEY=your_key_here
 GROQ_MODEL=llama-3.3-70b-versatile
+
+OLLAMA_URL=http://localhost:11434
+OLLAMA_EMBEDDING_MODEL=nomic-embed-text
 
 # Optional: Adjust AI behavior
 AI_CLASSIFICATION_TEMPERATURE=0.1
@@ -306,6 +346,7 @@ php artisan test --filter=AIIntegrationTest
 - [x] **Week 3**: Add conversation memory for follow-ups
 - [x] **Week 4**: Implement function calling for database queries
 - [x] **Week 6**: pgvector semantic search integration
+- [x] **Week 7**: Chunking + document ingestion pipeline
 - [ ] **Week 8**: RAG system for policy document retrieval
 - [ ] Multi-language support
 - [ ] Email integration (auto-send responses)
@@ -333,11 +374,6 @@ php artisan test --filter=AIIntegrationTest
 ---
 
 ## 📚 Week 3 → Week 4 Bridge
-
-**What you've mastered:**
-- ✅ Week 1: LLM API basics
-- ✅ Week 2: Prompt engineering
-- ✅ Week 3: Conversation memory + Advanced optimization
 
 **Week 4 Preview: Function Calling / Tool Use**
 ```
@@ -390,12 +426,6 @@ AI: *calls database* → "Order #12345 shipped yesterday, arrives tomorrow" ✅
 ---
 
 ## 📚 Week 4 → Week 5 Bridge
-
-**What you've mastered:**
-- ✅ Week 1: LLM API basics
-- ✅ Week 2: Prompt engineering
-- ✅ Week 3: Conversation memory + token optimization
-- ✅ Week 4: Function calling + database tools + smart tool loading
 
 **Week 5 Preview: Embeddings + Semantic Search**
 ```
@@ -450,14 +480,6 @@ AI: *semantic search* → Finds "missing delivery", "order not received",
 
 ## 📚 Week 6 → Week 7 Bridge
 
-**What I've mastered:**
-- ✅ Week 1: LLM API basics
-- ✅ Week 2: Prompt engineering
-- ✅ Week 3: Conversation memory + token optimization
-- ✅ Week 4: Function calling + database tools
-- ✅ Week 5: Embeddings + semantic similarity
-- ✅ Week 6: pgvector + semantic search in production
-
 **Week 7 Preview: Chunking + Document Ingestion**
 ```
 Current capability (Week 6):
@@ -488,6 +510,75 @@ Solution: Split into chunks → embed each chunk
 🔥 Excitement for Week 7: [9.99]
 ```
 ---
+
+---
+
+## 🎊 Week 7 Final Assessment
+
+**Technical Mastery:**
+
+| Concept | Level | Evidence |
+|---------|-------|----------|
+| Chunking Strategy | ⭐⭐⭐⭐⭐ | Paragraph-aware with overlap implemented |
+| PDF Text Extraction | ⭐⭐⭐⭐⭐ | 7-page PDF → clean text |
+| Ingestion Pipeline | ⭐⭐⭐⭐⭐ | Atomic transaction, status tracking |
+| Chunk Quality | ⭐⭐⭐⭐⭐ | Avg 245 tokens, all embedded |
+| RAG Retrieval | ⭐⭐⭐⭐⭐ | findRelevantChunks returning correct sections |
+| Production Thinking | ⭐⭐⭐⭐⭐ | Duplicate check, error states, delete cascade |
+
+**Overall Grade: A++** 🏆🏆🏆
+
+---
+
+## 📚 Week 7 → Week 8 Bridge
+
+**Week 8 Preview: Full RAG System**
+```
+What you built in Week 7:
+  Question → findRelevantChunks → relevant text ✅
+
+What Week 8 adds:
+  Question → findRelevantChunks → relevant text
+                                        ↓
+                              inject into LLM prompt
+                                        ↓
+                         "Based on these policy sections:
+                          [chunk 1], [chunk 2], [chunk 3]
+                          Answer: ..."
+                                        ↓
+                    Answer grounded in YOUR documents ✅
+```
+**Next:**
+- RAG architecture and why it reduces hallucinations
+- Building the prompt that injects retrieved chunks
+- Handling the case where no relevant chunks are found
+- Connecting RAG to ComplaintAI's conversation system
+- Admins can ask: "What does our policy say about refunds?"
+  and get answers backed by the actual uploaded document
+
+---
+
+## 💬 Week 7 Completion:
+```
+🎉 Completion status: [EXCEEDED EXPECTATIONS]
+🏆 Pipeline stages working: [5/5]
+💡 Key insight: [document structure influences chunk quality]
+🎯 Chunks created from test PDF: [17]
+🔥 Excitement for Week 8 (RAG): [10]
+```
+
+---
+
+## 📚 Week 1 → Week 8 Bridge
+
+**What you've mastered:**
+- ✅ Week 1: LLM API basics
+- ✅ Week 2: Prompt engineering
+- ✅ Week 3: Conversation memory + token optimization
+- ✅ Week 4: Function calling + database tools
+- ✅ Week 5: Embeddings + semantic similarity
+- ✅ Week 6: pgvector + semantic search
+
 
 
 ## 🤝 Contributing

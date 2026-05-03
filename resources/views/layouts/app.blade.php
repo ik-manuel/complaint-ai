@@ -17,6 +17,10 @@
                        class="text-gray-600 hover:text-blue-600">
                         🔍 Search
                     </a>
+                    <a href="{{ route('documents.index') }}"
+                       class="text-gray-600 hover:text-blue-600">
+                        📄 Documents
+                    </a>
                     <a href="{{ route('admin.index') }}" class="text-gray-600 hover:text-blue-600">Admin Dashboard</a>
                 </div>
             </div>

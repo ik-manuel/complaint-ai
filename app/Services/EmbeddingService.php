@@ -122,6 +122,14 @@ class EmbeddingService
     }
 
     /**
+     * Validate LIMIT to prevent SQL injection
+     */
+    private function limit(int $limit): int
+    {
+        return max(1, min((int)$limit, 100));
+    }
+
+    /**
      * Find the most similar complaints to a given complaint
      * Uses pgvector's <=> operator (cosine distance)
      * 
@@ -154,8 +162,8 @@ class EmbeddingService
         }
 
         try {
-            // Validate LIMIT to prevent SQL injection
-            $limit = max(1, min((int)$limit, 100));
+            // Validate limit
+            $limit = $this->limit($limit);
 
             // 0.45 threshold based on nomic-embed-text calibration threshold 
             // Below this score, results are not meaningfully related
@@ -213,7 +221,7 @@ class EmbeddingService
      * Search complaints by a raw text query
      * Used for admin semantic search feature
      * 
-     * @param string $query Natural language search query
+     * @param string $searchQuery Natural language search query
      * @param int $limit How many results to return
      * @return Collection
      */
@@ -224,8 +232,8 @@ class EmbeddingService
             $queryEmbedding  = $this->embed($searchQuery);
             $embeddingString = $this->formatForStorage($queryEmbedding);
 
-            // Validate LIMIT to prevent SQL injection
-            $limit = max(1, min((int)$limit, 100));
+            // Validate limit
+            $limit = $this->limit($limit);
 
             // 0.45 threshold based on nomic-embed-text calibration threshold 
             $minimumSimilarity = 0.45;
@@ -278,5 +286,78 @@ class EmbeddingService
             ]);
             return collect();
         }
-    } 
+    }
+
+    /** 
+     * Find the most relevant document chunks for a given query.
+     * This is the retrieval step in the RAG pipeline.
+     * 
+     * @param string    $searchQuery       Natural language question
+     * @param int|null  $documentId  Limit search to specific document (null = all documents)
+     * @param int       $limit       Number of chunks to retrieve
+     * @param float     $threshold   Minimum similarity score
+     * @return \Illuminate\Support\Collection
+     */
+    public function findRelevantChunks(
+        string $searchQuery,
+        ?int $documentId = null,
+        int $limit = 5,
+        float $threshold = 0.45
+    ): Collection {
+        try {
+            $queryEmbedding = $this->embed($searchQuery);
+            $embeddingString = $this->formatForStorage($queryEmbedding);
+
+            // Validate limit
+            $limit = $this->limit($limit);
+
+            // Build document filter clause
+            $documentFilter = $documentId ? "AND dc.document_id = {$documentId}" : '';
+
+            $query = "
+                SELECT
+                    sub.id,
+                    sub.document_id,
+                    sub.chunk_index,
+                    sub.content,
+                    sub.token_count,
+                    sub.similarity_score,
+                    d.title AS document_title
+                FROM (
+                    SELECT
+                        dc.id,
+                        dc.document_id,
+                        dc.chunk_index,
+                        dc.content,
+                        dc.token_count,
+                        (1 - (dc.embedding <=> ?::vector)) AS similarity_score
+                    FROM document_chunks dc
+                    WHERE dc.embedding IS NOT NULL
+                    {$documentFilter}
+                    ORDER BY dc.embedding <=> ?::vector ASC
+                    LIMIT {$limit}
+                ) sub
+                 INNER JOIN documents d ON d.id = sub.document_id
+                 WHERE sub.similarity_score >= {$threshold}
+                 ORDER BY sub.similarity_score DESC
+            ";
+            $results = DB::select($query, [$embeddingString, $embeddingString]);
+
+            Log::info('EmbeddingService: findRelevantChunks completed', [
+                'query'         => substr($searchQuery, 0, 60),
+                'document_id'   => $documentId,
+                'results_count' => count($results),
+                'threshold'     => $threshold,
+            ]);
+
+            return collect($results);
+
+        } catch (\Exception $e) {
+            Log::error('EmbeddingService: findRelevantChunks failed', [
+                'query' => $searchQuery,
+                'error' => $e->getMessage(),
+            ]);
+            return collect();
+        }
+    }
 }

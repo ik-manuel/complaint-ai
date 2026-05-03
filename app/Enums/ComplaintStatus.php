@@ -4,7 +4,7 @@ namespace App\Enums;
 
 enum ComplaintStatus: string
 {
-    case New = 'new';
+    case New       = 'new';
     case Responded = 'responded';
-    case Resolved = 'resolved';
+    case Resolved  = 'resolved';
 }
