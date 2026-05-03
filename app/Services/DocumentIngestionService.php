@@ -3,7 +3,6 @@
 namespace App\Services;
 
 use App\Models\Document;
-use App\Models\DocumentChunk;
 use App\Enums\DocumentStatus;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\DB;
@@ -125,7 +124,7 @@ class DocumentIngestionService
                 // Add page marker to help with context
                 $fullText .= "\n\n" . $pageText;
                 // Analysis state the above code did not implement
-                // What it comment stated "Add page marker..."
+                // What its comment stated "Add page marker..."
                 // So below is the actual implementation 
                 // $fullText .= "\n\n[Page " . ($pageNumber + 1) . "]\n\n" . $pageText;
             }

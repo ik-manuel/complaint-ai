@@ -42,6 +42,20 @@ class DocumentController extends Controller
             'file'  => 'required|file|mimes:pdf|max:10240', // 10MB max
         ]);
 
+        // Check for duplicate title
+        $existing = Document::where('title', $validated['title'])
+            ->where('status', 'completed')
+            ->first();
+
+        if ($existing) {
+            return back()
+                ->withInput()
+                ->withErrors([
+                    'title' => "A completed document with this title already exists. 
+                                Delete the existing one first if you want to re-upload."
+                ]);
+        }
+
         try {
             $document = $this->ingestionService->ingest(
                 $request->file('file'),

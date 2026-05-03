@@ -1,6 +1,6 @@
 @extends('layouts.app')
 
-@section('title', '{{ $document->title }} - ComplaintAI')
+@section('title', $document->title  . ' - ComplaintAI')
 
 @section('content')
 
