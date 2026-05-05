@@ -72,6 +72,15 @@ This project showcases fundamental AI engineering concepts:
 - **Document structure influence**: Bullet-point sections produce smaller chunks than prose
 - **RAG retrieval method**: findRelevantChunks returns semantically closest chunks to query
 
+### **Week 8 Concepts: Retrieval Augmented Generation (RAG)**
+- **RAG architecture**: Retrieve → Augment prompt → Generate grounded answer
+- **Hallucination prevention**: LLM instructed to answer ONLY from retrieved chunks
+- **Grounded vs ungrounded**: System knows what it knows and what it doesn't
+- **Conversation routing**: Policy questions → RAG, data questions → Tools
+- **Exception propagation**: Failures bubble to the level that can handle them
+- **Mixed intent handling**: Data patterns take routing priority over policy patterns
+- **Graceful degradation**: Ollama down → automatic fallback to tool-based responses
+
 
 ## 🛠️ Tech Stack
 
@@ -188,6 +197,10 @@ Visit: `http://localhost:8000`
 upload, list, show, delete
 ![Semantic Search](docs/screenshots/doc-ingestion.jpg)
 ![Semantic Search](docs/screenshots/doc-ingestion-chunks.jpg)
+
+### RAG Pipeline - asks questions, gets grounded answers
+![Semantic Search](docs/screenshots/rag.jpg)
+
 
 ## 🧪 How It Works
 
@@ -332,6 +345,7 @@ AI_MAX_TOKENS=500
 - Storage per complaint embedding: ~3KB (768 × 4 bytes)
 - Similarity threshold: 0.45 (searchByText), 0.50 (findSimilarComplaints)
 
+
 ## 🧪 Testing
 ```bash
 # Run tests
@@ -347,7 +361,7 @@ php artisan test --filter=AIIntegrationTest
 - [x] **Week 4**: Implement function calling for database queries
 - [x] **Week 6**: pgvector semantic search integration
 - [x] **Week 7**: Chunking + document ingestion pipeline
-- [ ] **Week 8**: RAG system for policy document retrieval
+- [x] **Week 8**: Full RAG system with grounded generation
 - [ ] Multi-language support
 - [ ] Email integration (auto-send responses)
 - [ ] Sentiment analysis visualization
@@ -428,6 +442,7 @@ AI: *calls database* → "Order #12345 shipped yesterday, arrives tomorrow" ✅
 ## 📚 Week 4 → Week 5 Bridge
 
 **Week 5 Preview: Embeddings + Semantic Search**
+- [Embeddings Basics Repo](https://github.com/ik-manuel/embeddings-basics)
 ```
 Current capability (Week 4):
 User: "Find complaints about shipping"
@@ -534,7 +549,7 @@ Solution: Split into chunks → embed each chunk
 
 **Week 8 Preview: Full RAG System**
 ```
-What you built in Week 7:
+What I built in Week 7:
   Question → findRelevantChunks → relevant text ✅
 
 What Week 8 adds:
@@ -546,7 +561,7 @@ What Week 8 adds:
                           [chunk 1], [chunk 2], [chunk 3]
                           Answer: ..."
                                         ↓
-                    Answer grounded in YOUR documents ✅
+                    Answer grounded in MY documents ✅
 ```
 **Next:**
 - RAG architecture and why it reduces hallucinations
@@ -569,6 +584,79 @@ What Week 8 adds:
 
 ---
 
+---
+
+## 🎊 Week 8 Final Assessment
+
+**Technical Mastery:**
+
+| Concept | Level | Evidence |
+|---------|-------|----------|
+| RAG Architecture | ⭐⭐⭐⭐⭐ | Full pipeline working end-to-end |
+| Hallucination Prevention | ⭐⭐⭐⭐⭐ | 100% test suite, no invented answers |
+| Conversation Routing | ⭐⭐⭐⭐⭐ | Clean two-path with priority logic |
+| ExceptYou are now employable as an AI Engineer.ion Handling | ⭐⭐⭐⭐⭐ | Propagation to correct handler level |
+| Graceful Degradation | ⭐⭐⭐⭐⭐ | Ollama down → tools fallback |
+| Engineering Judgment | ⭐⭐⭐⭐⭐ | Correctly scoped mixed intent to Week 13 |
+
+**Overall Grade: A++** 🏆🏆🏆
+
+---
+
+## 📚 Week 8 → Week 9 Bridge
+
+**Month 2 complete**
+
+**Week 9 Preview: Cost Control + Token Optimization**
+```
+I've built powerful systems.
+Which I now make production-cheap.
+
+Current state:
+  RAG answer:        ~1000 tokens per question
+  Tool call:         ~2000 tokens per turn
+  Conversation turn: ~500-800 tokens
+
+Week 9 adds:
+  Token usage logging per request
+  Prompt compression strategies
+  Response caching for repeated questions
+  Cost dashboard for admin
+  Real cost numbers on every API call
+```
+
+---
+
+## 💬 Month 2 Completion:
+```
+🎉 Completion status: [EXCEEDED EXPECTATIONS]
+💡 Most valuable Month 2 insight: [From ground down to production-ready AI system]
+🎯 RAG test suite score: [100%]
+🔥 Excitement for Month 3 (Production systems): [10]
+```
+
+## 🏆 Month 2 Complete — What I've Actually Built
+```
+ComplaintAI now has:
+
+  Customer submits complaint
+      ↓ auto-classified by AI (Week 2)
+      ↓ embedding generated + stored (Week 6)
+      ↓ similar complaints found automatically
+
+  Customer follows up in conversation
+      ↓ full memory maintained (Week 3)
+      ↓ policy question → answered from real documents (Week 8)
+      ↓ data question → queries live database (Week 4)
+      ↓ Ollama down → graceful fallback (Week 8)
+
+  Admin searches complaints
+      ↓ semantic search by meaning (Week 6)
+      ↓ uploads policy PDFs (Week 7)
+      ↓ asks questions, gets grounded answers (Week 8)
+```
+
+
 ## 📚 Week 1 → Week 8 Bridge
 
 **What you've mastered:**
@@ -578,6 +666,8 @@ What Week 8 adds:
 - ✅ Week 4: Function calling + database tools
 - ✅ Week 5: Embeddings + semantic similarity
 - ✅ Week 6: pgvector + semantic search
+- ✅ Week 7: Document chunking + ingestion pipeline
+- ✅ Week 8: Full RAG system with grounded generation
 
 
 

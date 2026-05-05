@@ -3,13 +3,19 @@
 @section('title', $document->title  . ' - ComplaintAI')
 
 @section('content')
-
-    <div class="flex items-center justify-between mb-6">
-        <h2 class="text-2xl font-bold text-gray-800">{{ $document->title }}</h2>
+    <div class="mb-4 flex justify-end">
         <a href="{{ route('documents.index') }}"
            class="text-sm text-blue-600 hover:underline">
-            ← Back to Documents
+             ← Back to Documents
         </a>
+    </div>
+    <div class="flex items-center justify-between mb-6">
+        <h2 class="text-2xl font-bold text-gray-800">{{ $document->title }}</h2>
+        <a href="{{ route('documents.ask', $document) }}"
+           class="px-4 py-2 bg-blue-600 text-white text-sm font-medium
+                rounded-lg hover:bg-blue-700 transition-colors">
+             💬 Ask Questions
+        </a> 
     </div>
 
     {{-- Document Stats --}}

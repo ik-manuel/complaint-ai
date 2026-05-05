@@ -2,11 +2,11 @@
 
 namespace App\Services;
 
+use App\Enums\ComplaintUrgency;
+use App\Enums\MessageRole;
+use App\Models\Complaint;
 use App\Models\Conversation;
 use App\Models\Message;
-use App\Models\Complaint;
-use App\Enums\MessageRole;
-use App\Enums\ComplaintUrgency;
 use Exception;
 use Illuminate\Support\Facades\Log;
 
@@ -15,7 +15,8 @@ class ConversationService
     public function __construct(
         private GroqService $groq,
         private ToolService $toolService,
-        private SmartToolLoader $smartToolLoader
+        private SmartToolLoader $smartToolLoader,
+        private RagService $ragService,
         ) { }
 
     /**
@@ -112,11 +113,67 @@ class ConversationService
             $this->summarizeConversation($conversation);
         }
 
+        // Conversation complaint
+        $complaint = $conversation->complaint;
+
+        // Route policy questions through RAG
+        if ($this->smartToolLoader->isPolicyQuestion($userMessage)) {
+            return $this->handleWithRag($conversation, $userMessage, $complaint);
+        }
+
+        // Existing tool-based flow for non-policy questions
+        return $this->handleWithTools($conversation, $userMessage, $complaint);
+    
+    }
+
+    /**
+     * Handle policy questions using RAG.
+     * Searches uploaded documents and answer from their content. 
+     */
+    private function handleWithRag(Conversation $conversation, string $userMessage, Complaint $complaint): array
+    {
+        Log::info('ConversationService: routing to RAG', [
+            'conversation_id' => $conversation->id,
+            'message'         => $userMessage,
+        ]);
+
+        try {
+            $result = $this->ragService->answer($userMessage);
+
+            $responseText = $result['grounded']
+                ? $result['answer']
+                : $result['answer'] . "\n\nFor further assistance, please contact our support team directly.";
+
+            $this->addMessage($conversation, MessageRole::Assistant, $responseText);
+
+            return [
+                'response'   => $responseText,
+                'tokens'     => $result['tokens'],
+                'tooks_used' => [],
+                'rag_used'   => true,
+                'grounded'   => $result['grounded'],
+            ];
+
+        } catch (\Exception $e) {
+            Log::error('ConversationService: RAG failed, falling back to tools', [
+                'error' => $e->getMessage(),
+            ]);
+
+            // Graceful fallback to regular tool flow
+            return $this->handleWithTools($conversation, $userMessage, $complaint);
+        }
+    }
+
+    /**
+     * Handle non-policy questions using function tools calling.
+     * Existing Week 4 logic extracted into name method.
+     */
+    private function handleWithTools(Conversation $conversation, string $userMessage, Complaint $complaint): array
+    {
         // Build conversation history
         $messages = $this->buildMessagesForApi($conversation);
-
+        
         // Build context from complaint
-        $complaint = $conversation->complaint;
         $context = [
             'ticket_number'  => $complaint->ticket_number,
             'customer_email' => $complaint->customer->email,
@@ -255,7 +312,6 @@ class ConversationService
             'tokens'     => $totalTokens,
             'tools_used' => $toolsUsed,
         ];
-
     }
 
     /**

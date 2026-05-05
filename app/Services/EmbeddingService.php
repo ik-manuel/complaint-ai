@@ -57,12 +57,11 @@ class EmbeddingService
 
             return $embedding;
 
-        } catch (\Exception $e) {
-            Log::error('EmbeddingService failed', [
-                'error' => $e->getMessage(),
-                'text'  => substr($text, 0, 100),
-            ]);
-            throw $e;
+        } catch (\ConnectionException $e) {
+            // This fires when Ollama/Model is not running
+            throw new \RuntimeException(
+                'Could not connect to Ollama\Model. Is it running? Error: ' . $e->getMessage()
+            );
         }
     }
 
@@ -161,14 +160,14 @@ class EmbeddingService
             return collect();
         }
 
-        try {
-            // Validate limit
-            $limit = $this->limit($limit);
+        // Validate limit
+        $limit = $this->limit($limit);
 
-            // 0.45 threshold based on nomic-embed-text calibration threshold 
-            // Below this score, results are not meaningfully related
-            $minimumSimilarity = 0.50;
-            
+        // 0.45 threshold based on nomic-embed-text calibration threshold 
+        // Below this score, results are not meaningfully related
+        $minimumSimilarity = 0.50;
+
+        try {
             // Use subquery: pgvector <=> operator doesn't work well with JOIN on same table
             // So we calculate similarity first, then join with customers
             $query = "
@@ -227,17 +226,17 @@ class EmbeddingService
      */
     public function searchByText(string $searchQuery, int $limit = 5): Collection
     {
+        // Convert search query to embedding
+        $queryEmbedding  = $this->embed($searchQuery);
+        $embeddingString = $this->formatForStorage($queryEmbedding);
+
+        // Validate limit
+        $limit = $this->limit($limit);
+
+        // 0.45 threshold based on nomic-embed-text calibration threshold 
+        $minimumSimilarity = 0.45;
+
         try {
-            // Convert search query to embedding
-            $queryEmbedding  = $this->embed($searchQuery);
-            $embeddingString = $this->formatForStorage($queryEmbedding);
-
-            // Validate limit
-            $limit = $this->limit($limit);
-
-            // 0.45 threshold based on nomic-embed-text calibration threshold 
-            $minimumSimilarity = 0.45;
-
             // Use subquery: pgvector <=> operator doesn't work well with JOIN on same table
             // So we calculate similarity first, then join with customers
             $query = "
@@ -284,7 +283,7 @@ class EmbeddingService
                 'query' => $searchQuery,
                 'error' => $e->getMessage(),
             ]);
-            return collect();
+            throw $e;
         }
     }
 
@@ -304,16 +303,17 @@ class EmbeddingService
         int $limit = 5,
         float $threshold = 0.45
     ): Collection {
+
+        $queryEmbedding = $this->embed($searchQuery);
+        $embeddingString = $this->formatForStorage($queryEmbedding);
+
+        // Validate limit
+        $limit = $this->limit($limit);
+
+        // Build document filter clause
+        $documentFilter = $documentId ? "AND dc.document_id = {$documentId}" : '';
+
         try {
-            $queryEmbedding = $this->embed($searchQuery);
-            $embeddingString = $this->formatForStorage($queryEmbedding);
-
-            // Validate limit
-            $limit = $this->limit($limit);
-
-            // Build document filter clause
-            $documentFilter = $documentId ? "AND dc.document_id = {$documentId}" : '';
-
             $query = "
                 SELECT
                     sub.id,
@@ -357,7 +357,8 @@ class EmbeddingService
                 'query' => $searchQuery,
                 'error' => $e->getMessage(),
             ]);
-            return collect();
+            
+            throw $e;
         }
     }
 }

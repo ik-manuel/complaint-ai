@@ -15,7 +15,7 @@ class ToolService
     public function getAvailableTools(): array
     {
         return [
-            // Existing tools
+            // Tools
             [
                 'type' => 'function',
                 'function' => [
@@ -68,7 +68,7 @@ class ToolService
                 ],
             ],
             
-            // NEW DATABASE TOOLS
+            // DATABASE TOOLS
             [
                 'type' => 'function',
                 'function' => [

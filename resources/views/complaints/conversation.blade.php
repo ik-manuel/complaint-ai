@@ -44,6 +44,11 @@
                                                 🔧 Used database tools
                                             </span>
                                         @endif
+                                        @if(str_contains($message->content, 'Section') || str_contains($message->content, 'policy'))
+                                            <span class="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded">
+                                                📄 From policy document
+                                            </span>
+                                        @endif
                                     @endif
                                     <span class="text-xs text-gray-500">{{ $message->created_at->diffForHumans() }}</span>
                                 </div>

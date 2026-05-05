@@ -31,6 +31,8 @@ Route::prefix('admin/documents')->name('documents.')->group(function () {
     Route::post('/',          [DocumentController::class, 'store'])->name('store');
     Route::get('/{document}', [DocumentController::class, 'show'])->name('show');
     Route::delete('/{document}', [DocumentController::class, 'destroy'])->name('destroy');
+    Route::get('/{document}/ask', [DocumentController::class, 'ask'])->name('ask');
+    Route::post('/{document}/ask', [DocumentController::class, 'ask'])->name('ask');
 });
 
 // TEST

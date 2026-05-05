@@ -110,6 +110,8 @@ $queries = [
     "What are user rights regarding their data?",
     "Who are nexTech",
     "What your under the age policy",
+    "What is payment",
+    "Who is paul",
 ];
 
 foreach ($queries as $query) {

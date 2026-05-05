@@ -103,7 +103,6 @@ class SmartToolLoader
 
         // === LAYER 2: Message-based tools ===
 
-
         // Math
         if (preg_match('/\b(\d+.*[\+\-\*\/]|calculate|percent|times|multiply|divide)\b/i', $message)) {
             $tools[] = $this->findTool($allTools, 'calculate');
@@ -134,6 +133,37 @@ class SmartToolLoader
         ]);
 
         return $tools;
+    }
+
+    /**
+     * Detect if a message is asking about company policy.
+     * These questions should be routed to RAG instead of 
+     * regural tool calling.
+     */
+    public function isPolicyQuestion(string $message): bool 
+    {
+        $message = strtolower($message);
+
+        // These are always data questions — never route to RAG
+        $dataPatterns = [
+            '/\b(status|ticket|my complaint|my order|
+                how many complaints|what time|calculate|
+                my account|my history)\b/ix',
+        ];
+
+        foreach ($dataPatterns as $pattern) {
+            if (preg_match($pattern, $message)) {
+                return false;
+            }
+        }
+
+        return (bool) preg_match(
+            '/\b(policy|policies|refund|return|shipping|warranty|
+                privacy|cookie|data|rights|terms|conditions|
+                guarantee|coverage|eligible|allowed|permitted|
+                procedure|process|how long|deadline|requirement)\b/ix',
+            $message
+        );
     }
 
     /**

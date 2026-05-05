@@ -73,15 +73,19 @@ class AdminController extends Controller
             try {
                 $results = $this->embeddingService->searchByText($query, 10);
 
-                \Log::info('AdminController: semantic search performed', [
-                    'query'         => $query,
-                    'results_count' => $results->count(),
-                ]);
-
-            } catch (\Exception $e) {
-                $error = 'Search failed. Please ensure Ollama is running.'; // Construct better error message for production
+            } catch (\RuntimeException $e) {
+                // Model/Ollama connection failure
+                $error = 'Search is temporarily unavailable. Please try again shortly.';
 
                 \Log::error('AdminController: semantic search failed', [
+                    'query' => $query,
+                    'error' => $e->getMessage(),
+                ]);
+            } catch (\Exception $e) {
+                // Database or other failure
+                $error = 'An unexpected error occurred during search.';
+
+                Log::error('AdminController: semantic search unexpected error', [
                     'query' => $query,
                     'error' => $e->getMessage(),
                 ]);
