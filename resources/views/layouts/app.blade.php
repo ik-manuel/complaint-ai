@@ -21,6 +21,10 @@
                        class="text-gray-600 hover:text-blue-600">
                         📄 Documents
                     </a>
+                    <a href="{{ route('admin.costs') }}"
+                       class="text-gray-600 hover:text-blue-600">
+                        💰 Costs
+                    </a>
                     <a href="{{ route('admin.index') }}" class="text-gray-600 hover:text-blue-600">Admin Dashboard</a>
                 </div>
             </div>

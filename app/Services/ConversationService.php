@@ -92,6 +92,10 @@ class ConversationService
         $result = $this->groq->chatWithHistory($messages, [
             'temperature' => 0.3,
             'max_tokens' => 500,
+            'operation'       => 'conversation_turn',
+            'complaint_id'    => $complaint_id    ?? null,
+            'conversation_id' => $conversation_id ?? null,
+            'metadata'        => ['round' => $round],
         ]);
 
         // Save AI response to conversation
@@ -187,8 +191,12 @@ class ConversationService
             \Log::info('ConversationService - No tools needed, direct answer');
 
             $response = $this->groq->chat($userMessage, [
-                'system'  => $messages[0]['content'] ?? 'You are a helpful assistant.',
-                'history' => array_slice($messages, 1), // conversation history
+                'system'          => $messages[0]['content'] ?? 'You are a helpful assistant.',
+                'history'         => array_slice($messages, 1), // conversation history
+                'operation'       => 'response_generation',
+                'complaint_id'    => $complaint->id,
+                'conversation_id' => $conversation->id,
+                'metadata'        => ['tools' => 'No tools needed'],
             ]);
 
             $this->addMessage($conversation, MessageRole::Assistant, $response['content']);
@@ -246,8 +254,12 @@ class ConversationService
             \Log::info("Tool loop - round {$iteration} of max {$maxIterations}");
 
             $response = $this->groq->chatWithTools($messages, $tools, [
-                'temperature' => 0.3,
-                'max_tokens'  => 500,
+                'temperature'     => 0.3,
+                'max_tokens'      => 500,
+                'operation'       => 'conversation_turn',
+                'complaint_id'    => $complaint->id,
+                'conversation_id' => $conversation->id,
+                'metadata'        => ['round' => $iteration],
             ]);
 
             $totalTokens += $response['tokens'];
@@ -467,6 +479,10 @@ class ConversationService
             $result = $this->groq->chat($prompt, [
                 'temperature' => 0.1,
                 'max_tokens' => 300,
+                'operation'       => 'summarization',
+                'complaint_id'    => $complaint_id    ?? null,
+                'conversation_id' => $convnewCountersation_id ?? null,
+                'metadata'        => ['summarization' => 'first_summerization'],
             ]);
 
             $conversation->update([
@@ -547,8 +563,12 @@ class ConversationService
 
         try {
             $result = $this->groq->chat($prompt, [
-                'temperature' => 0.1,
-                'max_tokens' => 400, // Slightly more for merged summary
+                'temperature'     => 0.1,
+                'max_tokens'      => 400, // Slightly more for merged summary
+                'operation'       => 'summarization',
+                'complaint_id'    => $complaint_id    ?? null,
+                'conversation_id' => $conversation_id ?? null,
+                'metadata'        => ['summarization' => 're_summerization'],
             ]);
 
             $conversation->update([

@@ -39,8 +39,10 @@ class ComplaintClassifier
         ";
 
         $result = $this->groq->chat($prompt, [
-            'temperature' => 0.1,
-            'max_tokens'  => 100,
+            'temperature'  => 0.1,
+            'max_tokens'   => 100,
+            'operation'    => 'classification',
+            'complaint_id' => $complaint->id ?? null,
         ]);
 
         return $this->parseClassification($result['content']);

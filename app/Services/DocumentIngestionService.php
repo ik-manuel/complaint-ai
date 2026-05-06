@@ -101,7 +101,11 @@ class DocumentIngestionService
             throw $e;
         }
 
+        // Invalidate RAG cache - new document means new possible answers
+        app(RagCacheService::class)->invalidate();
+
         return $document->fresh();
+
     }
 
     /**
@@ -192,6 +196,9 @@ class DocumentIngestionService
     {
         Storage::delete('document/' . $document->filename);
         $document->delete();
+
+        // Invalidate cache - deleted document changes available answers
+        app(RagCacheService::class)->invalidate();
 
         Log::info('DocumentIngestionService: document deleted', [
             'document_id' => $document->id,

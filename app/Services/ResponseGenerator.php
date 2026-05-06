@@ -33,9 +33,12 @@ class ResponseGenerator
         ";
 
         $result = $this->groq->chat($prompt, [
-            'system'      => $systemMessage,
-            'temperature' => 0.3,
-            'max_tokens'  => 300,
+            'system'          => $systemMessage,
+            'temperature'     => 0.3,
+            'max_tokens'      => 300,
+            'operation'       => 'response_generation',
+            'complaint_id'    => $complaint->id,
+            'metadata'        => [],
         ]);
 
         return [
