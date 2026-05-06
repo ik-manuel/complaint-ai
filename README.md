@@ -7,18 +7,28 @@
 
 An intelligent customer complaint management system that leverages Large Language Models (LLMs) to automatically classify complaints and generate professional, context-aware responses.
 
+
 ## 🎯 Project Overview
 
 ComplaintAI demonstrates practical application of AI/LLM concepts in a real-world customer service scenario. Built as a learning project to showcase AI integration skills with Laravel.
+
 
 ### **Key Features**
 
 - 🤖 **AI-Powered Classification**: Automatically categorizes complaints by urgency (low/medium/high) and type (billing, shipping, product quality, technical, other)
 - ✍️ **Intelligent Response Generation**: Creates personalized, empathetic responses using role-based prompting
+- 💬 **Conversation Memory**: Multi-turn complaint follow-up with auto-summarization and dynamic context window management
+- 🔧 **Function Calling & Tool Use**: AI autonomously queries live database, performs calculations, and retrieves real-time data using smart tool loading
+- 🔍 **Semantic Search**: Find complaints by meaning not keywords — "angry customer about delivery" finds all shipping complaints regardless of exact wording
+- 🗄️ **Vector Embeddings**: Every complaint stored as a 768-dimension vector in pgvector, enabling similarity matching and duplicate detection
+- 📄 **Document Ingestion Pipeline**: Upload policy PDFs — system extracts text, chunks into 300-token segments, and stores embeddings automatically
+- 🧠 **RAG System**: Customers ask policy questions in conversation and receive answers grounded strictly in uploaded policy documents — no hallucinations
 - 📊 **Admin Dashboard**: Review, edit, and approve AI-generated responses before sending
 - 📈 **Analytics**: Track complaint statistics, urgency levels, and resolution rates
 - ⚡ **Real-time Processing**: Instant AI analysis upon complaint submission
 - 🎨 **Modern UI**: Clean, responsive interface built with Tailwind CSS
+
+
 
 ## 🧠 AI Concepts Demonstrated
 
@@ -81,6 +91,16 @@ This project showcases fundamental AI engineering concepts:
 - **Mixed intent handling**: Data patterns take routing priority over policy patterns
 - **Graceful degradation**: Ollama down → automatic fallback to tool-based responses
 
+### **Week 9 Concepts: Cost Control + Token Optimization**
+- **Token economics**: Input vs output pricing, cost per operation type
+- **Usage logging**: Per-operation tracking with complaint/conversation linkage
+- **Exact-match caching**: Normalized question hashing for RAG response reuse
+- **Semantic cache limitation**: Why paraphrased questions miss exact-match cache
+- **Chunk compression**: Removing PDF artifacts before prompt injection (10-15% savings)
+- **Cache invalidation strategy**: Document changes invalidate all cached RAG answers
+- **Cost visibility**: Operation-level dashboard for production monitoring
+
+
 
 ## 🛠️ Tech Stack
 
@@ -92,6 +112,8 @@ This project showcases fundamental AI engineering concepts:
 - **Frontend**: Blade Templates + Tailwind CSS
 - **HTTP Client**: Guzzle (via Laravel HTTP)
 
+
+
 ## 📋 Prerequisites
 
 - PHP 8.2 or higher
@@ -99,6 +121,8 @@ This project showcases fundamental AI engineering concepts:
 - MySQL 8.0 or higher
 - Groq API Key ([Get one free](https://console.groq.com))
 - Ollama (Local Embedding Model) (https://ollama.com)
+
+
 
 ## 🚀 Installation
 
@@ -156,6 +180,8 @@ php artisan serve
 
 Visit: `http://localhost:8000`
 
+
+
 ## 📖 Usage
 
 ### **For Customers**
@@ -174,6 +200,10 @@ Visit: `http://localhost:8000`
 4. Edit responses if needed
 5. Approve and send to customer
 6. Mark as resolved when complete
+7. Upload and manage documents
+8. View token usage + costs
+
+
 
 ## 🎨 Screenshots
 
@@ -200,6 +230,10 @@ upload, list, show, delete
 
 ### RAG Pipeline - asks questions, gets grounded answers
 ![Semantic Search](docs/screenshots/rag.jpg)
+
+### Cost dashboard: real-time visibility by operation + daily totals
+![Semantic Search](docs/screenshots/usage.jpg)
+
 
 
 ## 🧪 How It Works
@@ -298,7 +332,21 @@ document_chunks
 ├─ embedding  vector(768)
 └─ created_at
 
+token_usage_logs
+├─ id
+├─ operation (classification/response_generation/conversation_turn/rag_answer)
+├─ complaint_id (nullable)
+├─ conversation_id (nullable)
+├─ input_tokens
+├─ output_tokens
+├─ total_tokens
+├─ cost_usd
+├─ model
+├─ metadata (nullable)
+├─ created_at
+
 ```
+
 
 ## 🔧 Configuration
 
@@ -315,6 +363,7 @@ AI_CLASSIFICATION_TEMPERATURE=0.1
 AI_GENERATION_TEMPERATURE=0.3
 AI_MAX_TOKENS=500
 ```
+
 
 ## 📈 Performance & Costs
 
@@ -345,6 +394,23 @@ AI_MAX_TOKENS=500
 - Storage per complaint embedding: ~3KB (768 × 4 bytes)
 - Similarity threshold: 0.45 (searchByText), 0.50 (findSimilarComplaints)
 
+**Week 9: Measured Token Usage**
+- RAG answer:          ~1065 tokens avg (most expensive)
+- Conversation turn:   ~680 tokens avg
+- Response generation: ~167 tokens avg
+- Classification:      ~168 tokens avg
+
+**Optimizations Applied**
+- RAG caching: repeated questions cost 0 tokens (cache TTL: 24hrs)
+- Chunk compression: 10-15% RAG token reduction
+- Token budget guard: conversation context capped at 2000 tokens
+- Selective tool loading: saves 200-300 tokens per conversation turn
+
+**Projected Monthly Cost (1000 complaints, 5 turns each)**
+- Without optimization: ~$35/month
+- With optimization:    ~$18/month (48% reduction)
+
+
 
 ## 🧪 Testing
 ```bash
@@ -362,6 +428,7 @@ php artisan test --filter=AIIntegrationTest
 - [x] **Week 6**: pgvector semantic search integration
 - [x] **Week 7**: Chunking + document ingestion pipeline
 - [x] **Week 8**: Full RAG system with grounded generation
+- [x] **Week 9**: Cost control + token optimization
 - [ ] Multi-language support
 - [ ] Email integration (auto-send responses)
 - [ ] Sentiment analysis visualization
@@ -656,10 +723,64 @@ ComplaintAI now has:
       ↓ asks questions, gets grounded answers (Week 8)
 ```
 
+---
+
+## 🎊 Week 9 Final Assessment
+
+**Technical Mastery:**
+
+| Concept | Level | Evidence |
+|---------|-------|----------|
+| Token Economics | ⭐⭐⭐⭐⭐ | Correctly predicted conversation_turn as expensive |
+| Usage Logging | ⭐⭐⭐⭐⭐ | All operations tagged, costs calculated |
+| RAG Caching | ⭐⭐⭐⭐⭐ | 0 tokens on cache hit confirmed |
+| Cache Limitations | ⭐⭐⭐⭐⭐ | Identified semantic miss as key weakness |
+| Production Thinking | ⭐⭐⭐⭐⭐ | Cost dashboard with daily visibility |
+| Compression Strategies | ⭐⭐⭐⭐⭐ | 4 techniques understood + implemented |
+
+**Overall Grade: A++** 🏆🏆🏆
+
+---
+
+## 📚 Week 9 → Week 10 Bridge
+
+**Week 10 Preview: Streaming Responses**
+```
+Current experience:
+  User sends message
+  Waits 3-8 seconds (silence)
+  Full response appears at once
+  Feels slow and unresponsive
+
+Week 10 experience:
+  User sends message
+  Response starts appearing word by word immediately
+  Feels fast and alive — like ChatGPT/Claude/Gemini
+  User reads while AI is still generating
+```
+
+**Next:**
+- How streaming works at the API level (SSE/chunked responses)
+- Laravel streaming responses
+- Frontend JavaScript consuming the stream
+- Why streaming feels faster even if total time is the same
+- Integrating streaming into ComplaintAI's conversation UI
+
+---
+
+## 💬 Week 9 Completion:
+```
+🎉 Completion status: [EXCEEDED EXPECTATIONS]
+🏆 Optimizations implemented: [3]
+💡 Most valuable insight: [semantic cache miss limitation]
+🎯 Token cost reduction achieved: [~48%]
+🔥 Excitement for Week 10 (Streaming): [10]
+```
+
 
 ## 📚 Week 1 → Week 8 Bridge
 
-**What you've mastered:**
+**What I've mastered:**
 - ✅ Week 1: LLM API basics
 - ✅ Week 2: Prompt engineering
 - ✅ Week 3: Conversation memory + token optimization
@@ -668,6 +789,7 @@ ComplaintAI now has:
 - ✅ Week 6: pgvector + semantic search
 - ✅ Week 7: Document chunking + ingestion pipeline
 - ✅ Week 8: Full RAG system with grounded generation
+- ✅ Week 9: Cost visibility and optimization
 
 
 
@@ -681,6 +803,7 @@ This is a learning project, but contributions are welcome! Please:
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
+
 ## 📚 Learning Resources
 
 This project was built while following an AI Engineering learning path:
@@ -689,6 +812,7 @@ This project was built while following an AI Engineering learning path:
 - [Groq Documentation](https://console.groq.com/docs)
 - [Anthropic Prompt Engineering Guide](https://docs.anthropic.com/en/docs/prompt-engineering)
 - [Laravel Documentation](https://laravel.com/docs)
+
 
 ## 📝 License
 

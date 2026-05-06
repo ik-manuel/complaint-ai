@@ -3,17 +3,23 @@
 namespace App\Http\Controllers;
 
 use App\Models\Complaint;
-use Illuminate\Http\Request;
 use App\Services\EmbeddingService;
+use App\Services\TokenLogger;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
+use Illuminate\View\View;
 
 class AdminController extends Controller
 {
-    public function __construct(private EmbeddingService $embeddingService) {}
+    public function __construct(
+        private EmbeddingService $embeddingService,
+        private TokenLogger $tokenLogger,
+        ) {}
 
     /**
      * Show admin dashboard with all complaints
      */
-    public function index()
+    public function index(): View
     {
         $complaints = Complaint::with(['customer', 'aiResponse'])
             ->latest()
@@ -33,7 +39,7 @@ class AdminController extends Controller
     /**
      * Show single complaint with AI response
      */
-    public function show(Complaint $complaint)
+    public function show(Complaint $complaint): View
     {
         $complaint->load(['customer', 'aiResponse', 'conversation.messages']);
 
@@ -59,7 +65,7 @@ class AdminController extends Controller
      * Semantics search across complaints using natural laView//|RedirectResponsenguage query.
      * Converts query text to embedding then finds nearest vectors in DB.
      */
-    public function search(Request $request)
+    public function search(Request $request): View
     {
         $validated = $request->validate([
             'q' => 'nullable|string|max:255',
@@ -144,5 +150,19 @@ class AdminController extends Controller
         $complaint->update(['status' => 'resolved']);
 
         return back()->with('success', 'Complaint marked as resolved!');
+    }
+
+    /**
+     * Tokens and cost logs - usage analysis
+     */
+    public function costs(): View
+    {
+        $monthlyCost = $this->tokenLogger->getMonthlyCost();
+        // By operation this month
+        $byOperation = $this->tokenLogger->byOperation();
+        // Daily totals for chart
+        $dailyTotals = $this->tokenLogger->dailyChart();
+
+        return view('admin.costs', compact('monthlyCost', 'byOperation', 'dailyTotals'));
     }
 }

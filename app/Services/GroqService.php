@@ -11,10 +11,11 @@ class GroqService
     private string $apiKey;
     private string $model;
 
-    public function __construct()
+    public function __construct(private TokenLogger $tokenLogger)
     {
         $this->apiKey = config('services.groq.api_key');
         $this->model = config('services.groq.model');
+        // $this->tokenLogger = $tokenLogger;
     }
 
     /**
@@ -59,57 +60,34 @@ class GroqService
                 throw new Exception('Groq API error: ' . $response->body());
             }
 
-            $data = $response->json();
+            $data         = $response->json();
+            $inputTokens  = $data['usage']['prompt_tokens']     ?? 0;
+            $outputTokens = $data['usage']['completion_tokens'] ?? 0;
+
+            // Log token usage if operation is specified
+            if (isset($options['operation'])) {
+                $this->tokenLogger->log(
+                    operation:      $options['operation'],
+                    inputTokens:    $inputTokens,
+                    outputTokens:   $outputTokens,
+                    complaintId:    $options['complaint_id']    ?? null,
+                    conversationId: $options['conversation_id'] ?? null,
+                    metadata:       $options['metadata']        ?? []
+                );
+            }
 
             return [
                 'content'       => $data['choices'][0]['message']['content'],
                 'tokens'        => $data['usage']['total_tokens'],
+                'input_tokens'  => $inputTokens,
+                'output_tokens' => $outputTokens,
                 'finish_reason' => $data['choices'][0]['finish_reason'] ?? 'stop',
             ];
 
         } catch (Exception $e) {
-            Log::error('Groq API Error: ' . $e->getMessage());
-            throw $e;
-        }
-    }
-
-    /**
-     * Send a pre-built messages array to the API.
-     * Used by RagService and other services that construct
-     * their own message arrays.
-     */
-    public function chatWithMessages(array $messages, array $options = []): array
-    {
-        $payload = [
-            'model'       => $this->model,
-            'messages'    => $messages,
-            'temperature' => $options['temperature'] ?? 0.3,
-            'max_tokens'  => $options['max_tokens']  ?? 500,
-        ];
-
-        try {
-            $response = Http::timeout(30)
-                ->withHeaders([
-                    'Authorization' => 'Bearer ' . $this->apiKey,
-                    'Content-Type'  => 'application/json',
-                ])
-                ->post('https://api.groq.com/openai/v1/chat/completions', $payload);
-
-            if (!$response->successful()) {
-                throw new \Exception('Groq API error: ' . $response->body());
-            }
-
-            $data = $response->json();
-
-            return [
-                'content'       => $data['choices'][0]['message']['content'],
-                'tokens'        => $data['usage']['total_tokens'],
-                'finish_reason' => $data['choices'][0]['finish_reason'],
-            ];
-
-        } catch (\Exception $e) {
-            Log::error('GroqService: chatWithMessages failed', [
-                'error' => $e->getMessage(),
+            Log::error('GroqService: chat failed', [
+                'error'     => $e->getMessage(),
+                'operation' => $options['operation'] ?? 'unknown',
             ]);
             throw $e;
         }
@@ -146,18 +124,36 @@ class GroqService
             }
   
             $data = $response->json();
-
+            $inputTokens  = $data['usage']['prompt_tokens']     ?? 0;
+            $outputTokens = $data['usage']['completion_tokens'] ?? 0;
             // Check if AI wants to call a function
             $message = $data['choices'][0]['message'];
+
+            // Log if operation specified
+            if (isset($options['operation'])) {
+                $this->tokenLogger->log(
+                    operation:      $options['operation'],
+                    inputTokens:    $inputTokens,
+                    outputTokens:   $outputTokens,
+                    complaintId:    $options['complaint_id']    ?? null,
+                    conversationId: $options['conversation_id'] ?? null,
+                    metadata:       $options['metadata']        ?? []
+                );
+            }
 
             return [
                 'content'       => $message['content'] ?? null,
                 'tool_calls'    => $message['tool_calls'] ?? null,
                 'tokens'        => $data['usage']['total_tokens'],
+                'input_tokens'  => $inputTokens,
+                'output_tokens' => $outputTokens,
                 'finish_reason' => $data['choices'][0]['finish_reason'],
             ];
+            
         } catch (Exception $e) {
-            Log::error('Groq API Error: ' . $e->getMessage());
+            Log::error('GroqService: chatWithTools failed', [
+                'error'     => $e->getMessage(),
+            ]);
             throw $e;
         }
     }

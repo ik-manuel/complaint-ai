@@ -28,11 +28,29 @@ class RagService
      */
     public function __construct(
         private EmbeddingService $embeddingService,
-        private GroqService $groqService
+        private GroqService $groqService,
+        private RagCacheService $cacheService,
     ) { }
 
     /**
+     * Use cache for document-wide questions (no specific document filter)
+     * Per-document questions are not cached as content differs
+     */
+    public function answer(string $question, ?int $documentId = null): array
+    {
+        if ($documentId === null) {
+            return $this->cacheService->remember(
+                $question,
+                fn() => $this->generateAnswer($question, $documentId)
+            );
+        }
+
+        return $this->generateAnswer($question, $documentId);
+    }
+
+    /**
      * Core RAG method: answer a question using retrieved document chunks.
+     * answer generation - extracted from answer() for cache wrapping.
      * 
      * @param string   $question      User's question
      * @param int|null $documentId    Limit retrieval to specific document (null = all)
@@ -44,7 +62,7 @@ class RagService
      *   grounded: bool
      * }
      */
-    public function answer(string $question, ?int $documentId = null): array
+    public function generateAnswer(string $question, ?int $documentId): array
     {
         Log::info('RagService: answering question', [
             'question'    => $question,
@@ -93,15 +111,19 @@ class RagService
 
         // Step 5: Generate answer from LLM
         $response = $this->groqService->chat($question, [
-            'system'      => $systemPrompt,
-            'temperature' => 0.1, // Low temperature = more faithfull to source
-            'max_tokens'  => 600,
+            'system'          => $systemPrompt,
+            'temperature'     => 0.1, // Low temperature = more faithfull to source
+            'max_tokens'      => 600,
+            'operation'       => 'rag_answer',
+            'complaint_id'    => $complaint_id    ?? null,
+            'conversation_id' => $conversation_id ?? null,
+            'metadata'        => ['chunks_used' => $chunks->count()],
         ]);
 
         // Step 6: Build source references for transparency
         $sources = $chunks->map(fn($chunk) => [
             'document_title' => $chunk->document_title,
-            'chunk_index'   => $chunk->chunk_index,
+            'chunk_index'    => $chunk->chunk_index,
             'similarity'     => round($chunk->similarity_score, 4),
         ])->toArray();
 

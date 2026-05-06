@@ -22,6 +22,7 @@ Route::prefix('admin')->name('admin.')->group(function () {
     Route::post('/complaints/{complaint}/approve', [AdminController::class, 'approve'])->name('approve');
     Route::post('/complaints/{complaint}/update-response', [AdminController::class, 'updateResponse'])->name('update-response');
     Route::post('/complaints/{complaint}/resolve', [AdminController::class, 'resolve'])->name('resolve');
+    Route::get('/admin/costs', [AdminController::class, 'costs'])->name('costs');
 });
 
 // Document ingestion routes (admin only)
