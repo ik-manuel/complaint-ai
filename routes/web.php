@@ -1,14 +1,18 @@
 <?php
 
-use Illuminate\Support\Facades\Route;
-use App\Http\Controllers\ComplaintController;
 use App\Http\Controllers\AdminController;
+use App\Http\Controllers\ComplaintController;
+use App\Http\Controllers\ConversationController;
 use App\Http\Controllers\DocumentController;
+use Illuminate\Support\Facades\Route;
 
 // Public Routes - Complaint Submission
 Route::get('/', [ComplaintController::class, 'create'])->name('complaint.create');
 Route::post('/complaints', [ComplaintController::class, 'store'])->name('complaint.store');
 Route::get('/complaints/success/{ticketNumber}', [ComplaintController::class, 'success'])->name('complaint.success');
+
+Route::post('/conversations/{conversation}/stream', [ConversationController::class, 'stream'])->name('conversation.stream');
+// Route::post('/admin/conversations/{conversation}/stream', [ConversationController::class, 'stream'])->name('conversation.stream');
 
 // Customer follow-up routes
 Route::get('/complaints/{ticketNumber}/conversation', [ComplaintController::class, 'conversation'])->name('complaint.conversation');

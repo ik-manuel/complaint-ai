@@ -6,6 +6,7 @@ use App\Enums\ComplaintUrgency;
 use App\Enums\MessageRole;
 use App\Models\Complaint;
 use App\Models\Conversation;
+use App\Models\Document;
 use App\Models\Message;
 use Exception;
 use Illuminate\Support\Facades\Log;
@@ -17,6 +18,7 @@ class ConversationService
         private ToolService $toolService,
         private SmartToolLoader $smartToolLoader,
         private RagService $ragService,
+        private EmbeddingService $embeddingService,
         ) { }
 
     /**
@@ -28,7 +30,7 @@ class ConversationService
         $systemPrompt = $this->getSystemPromptForUrgency($complaint->urgency->value);
 
         return $conversation = Conversation::create([
-            'complaint_id' => $complaint->id,
+            'complaint_id'  => $complaint->id,
             'system_prompt' => $systemPrompt,
         ]);
     }
@@ -67,8 +69,8 @@ class ConversationService
         // DEBUG: Log message count
         $messageCount = $conversation->messages()->count();
         \Log::info('Conversation state:', [
-            'conversation_id' => $conversation->id,
-            'total_messages' => $messageCount,
+            'conversation_id'  => $conversation->id,
+            'total_messages'   => $messageCount,
             'should_summarize' => $this->shouldSummarize($conversation),
         ]);
 
@@ -84,14 +86,14 @@ class ConversationService
         // TEMPORARY DEBUG: Log what we're sending
         \Log::info('API Request Messages:', [
             'conversation_id' => $conversation->id,
-            'message_count' => count($messages),
-            'messages' => $messages,
+            'message_count'   => count($messages),
+            'messages'        => $messages,
         ]);
 
         // Get AI response
         $result = $this->groq->chatWithHistory($messages, [
-            'temperature' => 0.3,
-            'max_tokens' => 500,
+            'temperature'     => 0.3,
+            'max_tokens'      => 500,
             'operation'       => 'conversation_turn',
             'complaint_id'    => $complaint_id    ?? null,
             'conversation_id' => $conversation_id ?? null,
@@ -131,49 +133,192 @@ class ConversationService
     }
 
     /**
+     * Streaming entry point conversation responses.
+     * Routes to the same handleWithRag/handleWithTools methods,
+     * passing $onToken to enable streaming in the generation step.
+     * 
+     * @param Conversation  $conversation
+     * @param string        $userMessage
+     * @param callable      $onToken        Call with each token as it arrives
+     * @return array
+     */
+    public function streamResponse(
+        Conversation $conversation,
+        string $userMessage,
+        callable $onToken
+    ): array {
+        // Add user message
+        $this->addMessage($conversation, MessageRole::User, $userMessage);
+
+        // Summarize if needed
+        if ($this->shouldSummarize($conversation)) {
+            $this->summarizeConversation($conversation);
+        }
+
+        // Conversation complaint
+        $complaint = $conversation->complaint;
+
+        // Route policy questions through RAG
+        if ($this->smartToolLoader->isPolicyQuestion($userMessage)) {
+            return $this->handleWithRag($conversation, $userMessage, $complaint, $onToken);
+        }
+
+        // Existing tool-based flow for non-policy questions
+        return $this->handleWithTools($conversation, $userMessage, $complaint, $onToken);
+    }
+
+    /**
+     * Build messages array for API (with memory!)
+     * Include conversation history
+     */
+    private function buildMessagesForApi(Conversation $conversation): array
+    {
+        $messages = [];
+
+        // Always include system prompt first
+        if ($conversation->system_prompt) {
+            $messages[] = [
+                'role'    => 'system',
+                'content' => $conversation->system_prompt,
+            ];
+        }
+
+        // Include summary if exists
+        if ($conversation->summary) {
+            $messages[] = [
+                'role'    => 'system',
+                'content' => "Previous conversation summary: " . $conversation->summary,
+            ];
+        }
+
+        // Get total count, skip older ones, take recent 10
+        $totalMessages = $conversation->messages()
+            ->where('role', '!=', 'system')
+            ->count();
+        
+        // Dynamic window size!
+        $windowSize = $this->getRecentMessageWindow($totalMessages);
+        
+        $skipCount = max(0, $totalMessages - $windowSize);
+
+        $recentMessages = $conversation->messages()
+            ->where('role', '!=', 'system')
+            ->orderBy('created_at', 'asc') 
+            ->skip($skipCount) 
+            ->take($windowSize) 
+            ->get();
+
+        foreach ($recentMessages as $message) {
+            $messages[] = $message->toApiFormat();
+        }
+
+        return $messages;
+    }
+
+    /**
      * Handle policy questions using RAG.
+     * When $onToken is provided, the LLM generation step streams token-by-token.
+     * When $onToken is null, behaves exactly as before (backward compatible).
+     * 
      * Searches uploaded documents and answer from their content. 
      */
-    private function handleWithRag(Conversation $conversation, string $userMessage, Complaint $complaint): array
-    {
+    private function handleWithRag(
+        Conversation $conversation, 
+        string $userMessage, 
+        Complaint $complaint,
+        ?callable $onToken = null
+    ): array {
         Log::info('ConversationService: routing to RAG', [
             'conversation_id' => $conversation->id,
             'message'         => $userMessage,
         ]);
-
+        
         try {
-            $result = $this->ragService->answer($userMessage);
+            // Retrieval phase — synchronous DB query, cannot stream
+            $chunks = $this->embeddingService->findRelevantChunks(
+                searchQuery:     $userMessage,
+                limit:     4,
+                threshold: 0.55
+            );
 
-            $responseText = $result['grounded']
-                ? $result['answer']
-                : $result['answer'] . "\n\nFor further assistance, please contact our support team directly.";
+            // No relevant chunks found — send fallback message
+            if ($chunks->isEmpty()) {
+                $documentCount = Document::where('status', 'completed')->count();
 
-            $this->addMessage($conversation, MessageRole::Assistant, $responseText);
+                $message = $documentCount === 0
+                    ? "Our policy documents have not been uploaded yet. Please contact our support team directly."
+                    : "I could not find specific information about that in our current policy documents. Please contact our support team directly.";
+
+                // Stream the fallback message if callback provided
+                if ($onToken) {
+                    foreach (str_split($message, 4) as $chunk) {
+                        $onToken($chunk);
+                    }
+                }
+
+                $this->addMessage($conversation, MessageRole::Assistant, $message);
+
+                return [
+                    'response'   => $message,
+                    'tokens'     => 0,
+                    'tools_used' => [],
+                    'rag_used'   => false,
+                ];
+            }
+
+            // Build RAG prompt from retrieved chunks
+            $context      = $this->ragService->buildContext($chunks);
+            $systemPrompt = $this->ragService->buildPrompt($context);
+
+            $groqOptions = [
+                'system'          => $systemPrompt,
+                'temperature'     => 0.1,
+                'max_tokens'      => 600,
+                'operation'       => 'rag_answer',
+                'complaint_id'    => $complaint->id,
+                'conversation_id' => $conversation->id,
+                'metadata'        => ['chunks_used' => $chunks->count()],
+            ];
+
+            // Generation phase — stream if callback provided, regular if not
+            if ($onToken) {
+                $result = $this->groq->streamChat($userMessage, $onToken, $groqOptions);
+            } else {
+                $result = $this->groq->chat($userMessage, $groqOptions);
+            }
+
+            $this->addMessage($conversation, MessageRole::Assistant, $result['content']);
 
             return [
-                'response'   => $responseText,
+                'response'   => $result['content'],
                 'tokens'     => $result['tokens'],
-                'tooks_used' => [],
+                'tools_used' => [],
                 'rag_used'   => true,
-                'grounded'   => $result['grounded'],
             ];
 
         } catch (\Exception $e) {
-            Log::error('ConversationService: RAG failed, falling back to tools', [
+            Log::error('ConversationService: handleWithRag failed', [
                 'error' => $e->getMessage(),
             ]);
 
-            // Graceful fallback to regular tool flow
-            return $this->handleWithTools($conversation, $userMessage, $complaint);
+            // Fallback: pass $onToken through so streaming still works
+            return $this->handleWithTools($conversation, $userMessage, $complaint, $onToken);
         }
     }
 
     /**
-     * Handle non-policy questions using function tools calling.
-     * Existing Week 4 logic extracted into name method.
+     * Handle data/action questions using function calling tools.
+     * When $onToken is provided:
+     *   - Tool execution rounds remain synchronous (JSON must be complete)
+     *   - Final text generation round uses streamChat() for true streaming
+     * When $onToken is null, behaves exactly as before (backward compatible).
      */
-    private function handleWithTools(Conversation $conversation, string $userMessage, Complaint $complaint): array
-    {
+    private function handleWithTools(
+        Conversation $conversation, 
+        string $userMessage, 
+        Complaint $complaint,
+        ?callable $onToken = null
+    ): array {
         // Build conversation history
         $messages = $this->buildMessagesForApi($conversation);
         
@@ -186,26 +331,15 @@ class ConversationService
         // Smart tool loading - only relevant tools
         $tools = $this->smartToolLoader->getConversationTools($userMessage, $context);
 
-        // If no tools needed, skip tool calling entirely
+        // Fast path: no tools needed (greeting, general message)
+        // Skip tool loop entirely — go straight to generation
         if (empty($tools)) {
-            \Log::info('ConversationService - No tools needed, direct answer');
-
-            $response = $this->groq->chat($userMessage, [
-                'system'          => $messages[0]['content'] ?? 'You are a helpful assistant.',
-                'history'         => array_slice($messages, 1), // conversation history
-                'operation'       => 'response_generation',
-                'complaint_id'    => $complaint->id,
-                'conversation_id' => $conversation->id,
-                'metadata'        => ['tools' => 'No tools needed'],
-            ]);
-
-            $this->addMessage($conversation, MessageRole::Assistant, $response['content']);
-
-            return [
-                'response'   => $response['content'],
-                'tokens'     => $response['tokens'],
-                'tools_used' => [],
-            ];
+            return $this->generateFinalResponse(
+                $conversation,
+                $complaint,
+                $messages,
+                $onToken
+            );
         }
 
         // Enrich system message with complaint context
@@ -233,9 +367,9 @@ class ConversationService
 
         $totalTokens = 0;
         $toolsUsed = [];
-        $maxIterations = 3; // Low limit - if prompt is good, will rarely need more than 2
+        $maxRounds = 3; // Low limit - if prompt is good, will rarely need more than 2
 
-        $iteration = 0;
+        $round = 0;
 
         /*
         * Why a loop?
@@ -246,12 +380,12 @@ class ConversationService
         *   Round 3 → Rare: AI calls another tool before answering
         *
         * The explicit two-call pattern only handles rounds 1 and 2.
-        * This loop handles all cases, with maxIterations as a safety limit.
+        * This loop handles all cases, with maxRounds as a safety limit.
         */
-        while ($iteration < $maxIterations) {
-            $iteration++;
+        while ($round < $maxRounds) {
+            $round++;
 
-            \Log::info("Tool loop - round {$iteration} of max {$maxIterations}");
+            Log::info("ConversationService: tool loop - round {$round} of max {$maxRounds}");
 
             $response = $this->groq->chatWithTools($messages, $tools, [
                 'temperature'     => 0.3,
@@ -259,7 +393,7 @@ class ConversationService
                 'operation'       => 'conversation_turn',
                 'complaint_id'    => $complaint->id,
                 'conversation_id' => $conversation->id,
-                'metadata'        => ['round' => $iteration],
+                'metadata'        => ['round' => $round],
             ]);
 
             $totalTokens += $response['tokens'];
@@ -270,13 +404,42 @@ class ConversationService
             // no tools were needed after all).
             // Clean text response
             if (!empty($response['content']) && empty($response['tool_calls'])) {
+                if ($onToken) {
+                    // True streaming: re-request the final answer via streamChat
+                    // with all accumulated messages (including tool results)
+                    // so the user sees real token-by-token output
+                    $streamResult = $this->groq->streamChat(
+                        $messages,  // full conversation including tool results
+                        $onToken,
+                        [
+                            'temperature'     => 0.3,
+                            'max_tokens'      => 500,
+                            'operation'       => 'conversation_turn',
+                            'complaint_id'    => $complaint->id,
+                            'conversation_id' => $conversation->id,
+                        ]
+                    );
+
+                    // Use the streamed content as the saved message
+                    $this->addMessage($conversation, MessageRole::Assistant, $streamResult['content']);
+                    $totalTokens += $streamResult['tokens'];
+
+                    return [
+                        'response'   => $streamResult['content'],
+                        'tokens'     => $totalTokens,
+                        'tools_used' => $toolsUsed,
+                        'rag_used'   => false,
+                    ];
+                }
+                // Non-streaming path
                 $this->addMessage($conversation, MessageRole::Assistant, $response['content']);
 
                 return [
                     'response'   => $response['content'],
                     'tokens'     => $totalTokens,
                     'tools_used' => $toolsUsed,
-                    'rounds'     => $iteration, // Track for monitoring
+                    'rag_used'   => false,
+                    'rounds'     => $round, // Track for monitoring
                 ];
             }
 
@@ -317,61 +480,57 @@ class ConversationService
         } 
 
         $fallback = 'I encountered an issue processing your request. Please try again.';
+
+        if ($onToken) {
+            foreach (str_split($fallback, 4) as $chunk) {
+                $onToken($chunk);
+            }
+        }
+
         $this->addMessage($conversation, MessageRole::Assistant, $fallback);
 
         return [
             'response'   => $fallback,
             'tokens'     => $totalTokens,
             'tools_used' => $toolsUsed,
+            'rag_used'   => false,
         ];
     }
 
     /**
-     * Build messages array for API (with memory!)
-     * Include conversation history
+     * Generate a direct response when no tools are needed.
+     * Used for greetings, general conversation, and simple questions.
+     * Streams if $onToken is provided.
      */
-    private function buildMessagesForApi(Conversation $conversation): array
-    {
-        $messages = [];
+    private function generateFinalResponse(
+        Conversation $conversation,
+        Complaint $complaint,
+        array $messages,
+        ?callable $onToken = null
+    ): array {
+        $groqOptions = [
+            'temperature'     => 0.3,
+            'max_tokens'      => 500,
+            'operation'       => 'conversation_turn',
+            'complaint_id'    => $complaint->id,
+            'conversation_id' => $conversation->id,
+        ];
 
-        // Always include system prompt first
-        if ($conversation->system_prompt) {
-            $messages[] = [
-                'role'    => 'system',
-                'content' => $conversation->system_prompt,
-            ];
+        if ($onToken) {
+            $response = $this->groq->streamChat($messages, $onToken, $groqOptions);
+        } else {
+            // Non-streaming: pass messages array directly to chat()
+            $response = $this->groq->chat($messages, $groqOptions);
         }
 
-        // Week 3 Day 3: Include summary if exists
-        if ($conversation->summary) {
-            $messages[] = [
-                'role'    => 'system',
-                'content' => "Previous conversation summary: " . $conversation->summary,
-            ];
-        }
+        $this->addMessage($conversation, MessageRole::Assistant, $response['content']);
 
-        // Get total count, skip older ones, take recent 10
-        $totalMessages = $conversation->messages()
-            ->where('role', '!=', 'system')
-            ->count();
-        
-        // Dynamic window size!
-        $windowSize = $this->getRecentMessageWindow($totalMessages);
-        
-        $skipCount = max(0, $totalMessages - $windowSize);
-
-        $recentMessages = $conversation->messages()
-            ->where('role', '!=', 'system')
-            ->orderBy('created_at', 'asc') 
-            ->skip($skipCount) 
-            ->take($windowSize) 
-            ->get();
-
-        foreach ($recentMessages as $message) {
-            $messages[] = $message->toApiFormat();
-        }
-
-        return $messages;
+        return [
+            'response'   => $response['content'],
+            'tokens'     => $response['tokens'],
+            'tools_used' => [],
+            'rag_used'   => false,
+        ];
     }
 
     /**
@@ -396,11 +555,11 @@ class ConversationService
     private function getRecentMessageWindow(int $totalMessages): int
     {
         return match(true) {
-            $totalMessages < 15 => min($totalMessages, 10),  // All or 10
-            $totalMessages < 30 => 12,   // Small: 12 messages
-            $totalMessages < 50 => 15,   // Medium: 15 messages
+            $totalMessages < 15  => min($totalMessages, 10),  // All or 10
+            $totalMessages < 30  => 12,   // Small: 12 messages
+            $totalMessages < 50  => 15,   // Medium: 15 messages
             $totalMessages < 100 => 20,  // Large: 20 messages
-            default => 25,               // Very large: 25 messages
+            default              => 25,               // Very large: 25 messages
         };
     }
 
@@ -456,7 +615,7 @@ class ConversationService
 
         $conversationText = '';
         foreach ($messagesToSummarize as $message) {
-            $role = $message->role === \App\Enums\MessageRole::User ? 'Customer' : 'Support';
+            $role = $message->role === MessageRole::User ? 'Customer' : 'Support';
             $conversationText .= "{$role}: {$message->content}\n\n";
         }
 
@@ -477,18 +636,17 @@ class ConversationService
 
         try {
             $result = $this->groq->chat($prompt, [
-                'temperature' => 0.1,
-                'max_tokens' => 300,
+                'temperature'     => 0.1,
+                'max_tokens'      => 300,
                 'operation'       => 'summarization',
-                'complaint_id'    => $complaint_id    ?? null,
-                'conversation_id' => $convnewCountersation_id ?? null,
+                'conversation_id' => $conversation_id ?? null,
                 'metadata'        => ['summarization' => 'first_summerization'],
             ]);
 
             $conversation->update([
-                'summary' => $result['content'],
+                'summary'                   => $result['content'],
                 'messages_summarized_count' => $count,
-                'last_summarized_at' => now(),
+                'last_summarized_at'        => now(),
             ]);
 
             \Log::info('First summary created', [
@@ -525,8 +683,8 @@ class ConversationService
 
         \Log::info('Smart re-summarization:', [
             'previously_summarized' => $previouslySummarized,
-            'new_to_summarize' => $newMessagesToSummarize,
-            'total_in_new_summary' => $newCount,
+            'new_to_summarize'      => $newMessagesToSummarize,
+            'total_in_new_summary'  => $newCount,
         ]);
 
         // Get only NEW messages that weren't in previous summary
@@ -539,7 +697,7 @@ class ConversationService
 
         $newConversationText = '';
         foreach ($newMessages as $message) {
-            $role = $message->role === \App\Enums\MessageRole::User ? 'Customer' : 'Support';
+            $role = $message->role === MessageRole::User ? 'Customer' : 'Support';
             $newConversationText .= "{$role}: {$message->content}\n\n";
         }
 
@@ -557,7 +715,7 @@ class ConversationService
             1. Keeps important information from the previous summary
             2. Integrates the new information
             3. Maintains chronological flow
-            4. Stays under 200 words
+            4. Stays under 300 words
 
             UPDATED SUMMARY:";
 
@@ -566,22 +724,21 @@ class ConversationService
                 'temperature'     => 0.1,
                 'max_tokens'      => 400, // Slightly more for merged summary
                 'operation'       => 'summarization',
-                'complaint_id'    => $complaint_id    ?? null,
                 'conversation_id' => $conversation_id ?? null,
                 'metadata'        => ['summarization' => 're_summerization'],
             ]);
 
             $conversation->update([
-                'summary' => $result['content'],
+                'summary'                   => $result['content'],
                 'messages_summarized_count' => $newCount,
-                'last_summarized_at' => now(),
+                'last_summarized_at'        => now(),
             ]);
 
             \Log::info('Smart re-summarization complete', [
                 'new_messages_processed' => $newMessagesToSummarize,
-                'total_now_summarized' => $newCount,
-                'tokens_used' => $result['tokens'],
-                'token_savings' => 'Only processed ' . $newMessagesToSummarize . ' messages instead of ' . $newCount,
+                'total_now_summarized'   => $newCount,
+                'tokens_used'            => $result['tokens'],
+                'token_savings'          => 'Only processed ' . $newMessagesToSummarize . ' messages instead of ' . $newCount,
             ]);
 
             return $result['content'];
