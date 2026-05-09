@@ -100,6 +100,15 @@ This project showcases fundamental AI engineering concepts:
 - **Cache invalidation strategy**: Document changes invalidate all cached RAG answers
 - **Cost visibility**: Operation-level dashboard for production monitoring
 
+### **Week 10 Concepts: Streaming Responses**
+- **Server-Sent Events (SSE)**: HTTP protocol keeping connection open to push chunks as they arrive
+- **Guzzle streaming**: Why Laravel's HTTP client buffers by default and why Guzzle with `stream: true` is needed instead
+- **Token-by-token rendering**: Reading `delta.content` from each SSE chunk and appending to DOM in real time
+- **Output buffering**: Why `ob_flush()` + `connection_aborted()` guards are required in PHP streaming
+- **Optional callable pattern**: Extending existing methods with `?callable $onToken = null` for backward-compatible streaming
+- **True vs artificial streaming**: Why tool call rounds must stay synchronous (JSON must be complete) while only the final generation step is truly streamed
+- **Duplicate submission guard**: `isStreaming` flag preventing race conditions on fast Ctrl+Enter
+
 
 
 ## 🛠️ Tech Stack
@@ -410,6 +419,13 @@ AI_MAX_TOKENS=500
 - Without optimization: ~$35/month
 - With optimization:    ~$18/month (48% reduction)
 
+**Week 10: Streaming Impact**
+- Time to first token: ~300ms (vs ~5s full wait before)
+- User perception: dramatically faster despite identical total generation time
+- Extra tokens (tool path): ~200-400 tokens per streamed tool response due to
+  double-call pattern (chatWithTools for tool detection + streamChat for final answer)
+- Trade-off: accepted for Week 10 scope — query decomposition in Week 13 will eliminate this
+
 
 
 ## 🧪 Testing
@@ -429,6 +445,7 @@ php artisan test --filter=AIIntegrationTest
 - [x] **Week 7**: Chunking + document ingestion pipeline
 - [x] **Week 8**: Full RAG system with grounded generation
 - [x] **Week 9**: Cost control + token optimization
+- [x] **Week 10**: Streaming responses via SSE
 - [ ] Multi-language support
 - [ ] Email integration (auto-send responses)
 - [ ] Sentiment analysis visualization
@@ -777,6 +794,61 @@ Week 10 experience:
 🔥 Excitement for Week 10 (Streaming): [10]
 ```
 
+---
+
+## 🎊 Week 10 Final Assessment
+
+**Technical Mastery:**
+
+| Concept | Level | Evidence |
+|---------|-------|----------|
+| SSE Architecture | ⭐⭐⭐⭐⭐ | Full pipeline working in browser |
+| PHP Streaming | ⭐⭐⭐⭐⭐ | ob_flush guard self-discovered and fixed |
+| JS SSE Consumer | ⭐⭐⭐⭐⭐ | Token-by-token DOM updates with cursor |
+| Backward Compatibility | ⭐⭐⭐⭐⭐ | ?callable $onToken pattern — zero breaking changes |
+| Engineering Judgment | ⭐⭐⭐⭐⭐ | Correctly identified artificial vs true streaming |
+| Production Thinking | ⭐⭐⭐⭐⭐ | Disconnect guard, duplicate submission prevention |
+
+**Overall Grade: A++** 🏆🏆🏆
+
+---
+
+## 📚 Week 10 → Week 11 Bridge
+
+**Week 11 Preview: Background Jobs + Queues**
+```
+Current problem:
+  Admin uploads a 20-page PDF
+  Browser hangs for 45-60 seconds
+  Page looks frozen while chunking + embedding runs
+  If connection drops → ingestion fails silently
+
+Week 11 solution:
+  Admin uploads PDF → instant response ("Processing...")
+  Background worker picks up the job
+  Chunks + embeds asynchronously (takes as long as needed)
+  Admin gets notified when complete
+  Connection drops → job still finishes in background
+```
+
+**Next:**
+- Laravel queues and workers architecture
+- How jobs serialize and deserialize
+- Moving DocumentIngestionService into a dispatchable job
+- Database queue driver (no Redis needed yet)
+- Polling for job status from the frontend
+
+---
+
+## 💬 Week 10 Completion:
+```
+🎉 Completion status: [EXCEEDED EXPECTATIONS]
+🏆 Browser tests passing: [6/6]
+💡 Biggest insight: [SSE — time to first token transforms perceived performance]
+🎯 Streaming paths working: [general / tools / RAG]
+🔥 Excitement for Week 11 (Background Jobs): [8]
+```
+
 
 ## 📚 Week 1 → Week 8 Bridge
 
@@ -790,6 +862,7 @@ Week 10 experience:
 - ✅ Week 7: Document chunking + ingestion pipeline
 - ✅ Week 8: Full RAG system with grounded generation
 - ✅ Week 9: Cost visibility and optimization
+- ✅ Week 10: Streaming responses via SSE
 
 
 

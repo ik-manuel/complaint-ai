@@ -151,7 +151,7 @@ class RagService
      * Build a numbered context string fromretrieved chunks.
      * Each chunk is clearly delineated so the LLM can reference them.
      */
-    private function buildContext(Collection $chunks): string
+    public function buildContext(Collection $chunks): string
     {
         $context = '';
 
@@ -171,7 +171,7 @@ class RagService
      * The system prompt is the most important part of RAG -
      * It constrains the LLM to answer ONLY from the provided context.
      */
-    private function buildPrompt(string $context): string
+    public function buildPrompt(string $context): string
     {
         return <<<PROMPT
             You are a helpful customer service assistant for a company.
