@@ -109,6 +109,17 @@ This project showcases fundamental AI engineering concepts:
 - **True vs artificial streaming**: Why tool call rounds must stay synchronous (JSON must be complete) while only the final generation step is truly streamed
 - **Duplicate submission guard**: `isStreaming` flag preventing race conditions on fast Ctrl+Enter
 
+### **Week 11 Concepts: Background Jobs + Queues**
+- **Queue architecture**: Jobs table, worker process, dispatcher — three separate components
+- **ShouldQueue interface**: What makes a Laravel class a dispatchable background job
+- **SerializesModels**: Why jobs store model IDs not model instances (avoids stale data)
+- **Job lifecycle**: pending → processing → completed / failed_jobs (retryable)
+- **Retry configuration**: $tries, $timeout, $backoff — controlling resilience
+- **Partial failure recovery**: Deleting incomplete chunks before retry prevents data corruption
+- **failed() hook**: Final handler after all retry attempts exhausted
+- **Status polling**: Frontend 3s interval hitting JSON endpoint — lightweight alternative to WebSockets for slow async tasks
+- **Process separation**: Web server and queue worker are independent — worker survives HTTP connection drops
+
 
 
 ## 🛠️ Tech Stack
@@ -426,6 +437,13 @@ AI_MAX_TOKENS=500
   double-call pattern (chatWithTools for tool detection + streamChat for final answer)
 - Trade-off: accepted for Week 10 scope — query decomposition in Week 13 will eliminate this
 
+**Week 11: Async Processing Impact**
+- Upload response time: ~0.2s (was 45-60s blocking the browser)
+- PHP timeout risk: eliminated (worker has no HTTP timeout)
+- Connection fragility: eliminated (worker is independent of HTTP)
+- Retry resilience: up to 3 attempts with 30s backoff between each
+- Partial chunk cleanup: ensures clean state on every retry attempt
+
 
 
 ## 🧪 Testing
@@ -446,6 +464,7 @@ php artisan test --filter=AIIntegrationTest
 - [x] **Week 8**: Full RAG system with grounded generation
 - [x] **Week 9**: Cost control + token optimization
 - [x] **Week 10**: Streaming responses via SSE
+- [x] **Week 11**: Background jobs + async document processing
 - [ ] Multi-language support
 - [ ] Email integration (auto-send responses)
 - [ ] Sentiment analysis visualization
@@ -849,8 +868,39 @@ Week 11 solution:
 🔥 Excitement for Week 11 (Background Jobs): [8]
 ```
 
+---
 
-## 📚 Week 1 → Week 8 Bridge
+## 🎊 Week 11 Final Assessment
+
+**Technical Mastery:**
+
+| Concept | Level | Evidence |
+|---------|-------|----------|
+| Queue Architecture | ⭐⭐⭐⭐⭐ | Full async pipeline working first try |
+| Job Design | ⭐⭐⭐⭐⭐ | Retry logic, timeout, backoff, failed() hook |
+| Failure Recovery | ⭐⭐⭐⭐⭐ | Partial chunk cleanup before retry |
+| Status Polling | ⭐⭐⭐⭐⭐ | Live badge + auto-chunk reload on completion |
+| Production Thinking | ⭐⭐⭐⭐⭐ | Zero errors, all edge cases handled |
+| Clean Separation | ⭐⭐⭐⭐⭐ | Service dispatches, job executes — correct boundaries |
+
+**Overall Grade: A++** 🏆🏆🏆
+
+---
+
+## 📚 Week 11 → Week 12 Bridge
+
+
+## 💬 Week 11 Completion:
+
+
+**Week 12 Preview: Mini AI SaaS**
+Three SaaS project options:
+- **AI Resume Reviewer** — user uploads a resume, AI gives structured feedback on clarity, impact, ATS optimization, missing sections ✅
+- **AI Study Assistant** — user pastes study material, AI generates flashcards, quizzes, summaries, explains concepts
+- **AI Content Generator** — user describes their brand/topic, AI generates blog posts, social captions, email copy
+
+
+## 📚 Week 1 → Week 11 Bridge
 
 **What I've mastered:**
 - ✅ Week 1: LLM API basics
@@ -863,6 +913,7 @@ Week 11 solution:
 - ✅ Week 8: Full RAG system with grounded generation
 - ✅ Week 9: Cost visibility and optimization
 - ✅ Week 10: Streaming responses via SSE
+- ✅ Week 11: Background jobs + async processing
 
 
 

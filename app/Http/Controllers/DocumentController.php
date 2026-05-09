@@ -2,9 +2,11 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\DocumentStatus;
 use App\Models\Document;
 use App\Services\DocumentIngestionService;
 use App\Services\RagService;
+use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -47,7 +49,7 @@ class DocumentController extends Controller
 
         // Check for duplicate title
         $existing = Document::where('title', $validated['title'])
-            ->where('status', 'completed')
+            ->where('status', DocumentStatus::Completed)
             ->first();
 
         if ($existing) {
@@ -67,7 +69,8 @@ class DocumentController extends Controller
 
             return redirect()
                 ->route('documents.show', $document)
-                ->with('success', "Document \"{$document->title}\" ingested successfully. {$document->total_chunks} chunks created.");
+                ->with('success', "Document \"{$document->title}\" uploaded successfully. " .
+                              'Processing in background — refresh in a moment to see chunks.');
                 
         } catch (\Exception $e) {
             return back()
@@ -129,6 +132,20 @@ class DocumentController extends Controller
         }
 
         return view('documents.ask', compact('document', 'question', 'result'));
+    }
+
+    /**
+     * Return current document processing status as JSON.
+     * Called by frontend polling every 3 seconds.
+     */
+    public function status(Document $document): JsonResponse
+    {
+        return response()->json([
+            'status'        => $document->status->value,
+            'total_chunks'  => $document->total_chunks,
+            'total_pages'   => $document->total_pages,
+            'error_message' => $document->error_message,
+        ]);
     }
 
     /**
